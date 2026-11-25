@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "jsonc"
+version = "0.3.0"
+abi = 13
+library = "parser.dll"
+entrypoint = "tree_sitter_jsonc"
+extensions = [".jsonc", ".code-workspace"]
+query = "highlights.scm"
+release = "1.0.0"

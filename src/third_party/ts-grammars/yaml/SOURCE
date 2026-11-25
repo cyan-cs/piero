@@ -1,0 +1,2 @@
+https://github.com/tree-sitter-grammars/tree-sitter-yaml tag v0.7.2 commit 7708026449bed86239b1cd5bce6e3c34dbca6415
+generated parser.c and the external scanner, unchanged

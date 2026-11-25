@@ -1,0 +1,117 @@
+BasedOnStyle: LLVM
+
+# ==========================================
+# 基本
+# ==========================================
+ColumnLimit: 80
+UseTab: ForIndentation
+TabWidth: 8
+IndentWidth: 8
+ContinuationIndentWidth: 8
+
+# ==========================================
+# 波括弧
+# ==========================================
+BreakBeforeBraces: Custom
+
+BraceWrapping:
+  AfterFunction: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterEnum: true
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeWhile: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+
+# ==========================================
+# インデント
+# ==========================================
+IndentCaseLabels: false
+IndentCaseBlocks: false
+IndentPPDirectives: AfterHash
+
+# ==========================================
+# ポインタ
+# ==========================================
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# ==========================================
+# 短い処理
+# ==========================================
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
+
+# ==========================================
+# switch / case の整列
+# ==========================================
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: false
+
+# ==========================================
+# 整列
+# ==========================================
+AlignAfterOpenBracket: false
+AlignOperands: DontAlign
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+
+# ==========================================
+# 関数と引数
+# ==========================================
+PackArguments:
+  BinPack: BinPack
+
+PackParameters:
+  BinPack: OnePerLine
+
+SpaceBeforeParens: ControlStatements
+
+# ==========================================
+# include
+# ==========================================
+# 並べ替えない: windows.h を内包するローカルヘッダの後に SDK ヘッダを置く
+# 順序が実在し、Regroup すると shellapi.h 等が先頭に出てビルドが壊れる。
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+IncludeCategories:
+  # Winsock must precede windows.h unless
+  # WIN32_LEAN_AND_MEAN is defined beforehand.
+  - Regex: '^<winsock2\.h>$'
+    Priority: -3
+
+  # Windows core header before other SDK headers.
+  - Regex: '^<windows\.h>$'
+    Priority: -2
+
+  # Other system and SDK headers.
+  - Regex: "^<.*>$"
+    Priority: 1
+
+  # Project-local headers.
+  - Regex: '^".*"$'
+    Priority: 2
+
+# ==========================================
+# コメント
+# ==========================================
+ReflowComments: IndentOnly
+CommentPragmas: "^ IWYU pragma:"
+
+# ==========================================
+# 空行
+# ==========================================
+MaxEmptyLinesToKeep: 1
+
+# 1行でも必ず波括弧で囲む
+InsertBraces: true

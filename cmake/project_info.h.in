@@ -1,0 +1,11 @@
+/* Generated from the canonical root LICENSE; do not edit. */
+#ifndef WF_PROJECT_INFO_H
+#define WF_PROJECT_INFO_H
+
+static const char wf_project_license[] =
+"@WF_PROJECT_LICENSE_C@";
+
+#define WF_PROJECT_URL "@WF_PROJECT_URL@"
+#define WF_SPONSOR_URL "https://x.com/dev_cyan"
+
+#endif

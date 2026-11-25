@@ -1,0 +1,113 @@
+name: Validation
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      analysis:
+        description: Run advisory MSVC analysis as well
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  # Automatic runs supersede only the same event/ref. Each manual run is unique.
+  group: validation-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'automatic' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: python tools/check_docs.py
+      - run: python tools/check_secrets.py --history
+      - name: Test commit-range and result-summary checks
+        run: python -m unittest discover -s tests -p test_ci_tools.py
+      - name: Test documentation checks
+        run: python -m unittest discover -s tests -p test_docs.py
+      - name: Check committed whitespace (including a new repository)
+        run: python tools/ci_changes.py --whitespace
+  windows:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [clang, msvc]
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Select verified LLVM toolchain
+        if: matrix.toolchain == 'clang'
+        shell: powershell
+        run: ./tools/setup_ci_llvm.ps1
+      - name: Build and run CTest (known qualification failures remain failures)
+        shell: powershell
+        run: ./tools/validate_publication.ps1 -Toolchain ${{ matrix.toolchain }} -Configuration ${{ matrix.configuration }} -BuildDirectory out/ci -JUnit out/ci/ctest.xml
+      - name: Collect test verdicts without raw diagnostic contents
+        if: always()
+        shell: powershell
+        run: python tools/ci_test_results.py out/ci/ctest.xml out/ci/ci-results.json
+      - name: Preserve minimal test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tests-${{ matrix.toolchain }}-${{ matrix.configuration }}-${{ github.run_attempt }}
+          path: out/ci/ci-results.json
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7
+  sanitizer:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Select verified LLVM toolchain
+        shell: powershell
+        run: ./tools/setup_ci_llvm.ps1
+      - name: Instrumented development build and CTest
+        shell: powershell
+        run: ./tools/validate_publication.ps1 -Toolchain clang -Configuration Debug -Sanitize -BuildDirectory out/san -JUnit out/san/ctest.xml
+      - name: Collect sanitizer verdicts without raw diagnostic contents
+        if: always()
+        shell: powershell
+        run: python tools/ci_test_results.py out/san/ctest.xml out/san/ci-results.json
+      - name: Preserve minimal sanitizer results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tests-sanitizer-Debug-${{ github.run_attempt }}
+          path: out/san/ci-results.json
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7
+  formatting:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Select verified LLVM formatter
+        shell: powershell
+        run: ./tools/setup_ci_llvm.ps1
+      - name: Check changed first-party C files
+        shell: powershell
+        run: python tools/ci_changes.py --format
+  analysis:
+    if: github.event_name == 'workflow_dispatch' && inputs.analysis
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - shell: powershell
+        run: ./tools/validate_publication.ps1 -Toolchain msvc -Analyze -BuildOnly -BuildDirectory out/analyze

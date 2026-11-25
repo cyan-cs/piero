@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "powershell"
+version = "0.26.6"
+abi = 15
+library = "parser.dll"
+entrypoint = "tree_sitter_powershell"
+extensions = [".ps1", ".psm1", ".psd1"]
+query = "highlights.scm"
+release = "1.0.0"

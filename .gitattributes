@@ -1,0 +1,31 @@
+# Default text normalization.
+* text=auto
+
+# C17 source files.
+*.c text eol=lf
+*.h text eol=lf
+
+# Build configuration.
+CMakeLists.txt text eol=lf
+*.cmake text eol=lf
+
+# Scripts.
+*.ps1 text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Documentation and configuration.
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+# Preserve exact bytes for historical test evidence.
+/p0-results/** -text
+
+# Preserve archive fixtures without text conversion.
+tests/archive/* binary

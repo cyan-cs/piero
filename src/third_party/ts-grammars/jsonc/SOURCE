@@ -1,0 +1,2 @@
+https://gitlab.com/WhyNotHugo/tree-sitter-jsonc tag v0.3.0 commit 02b01653c8a1c198ae7287d566efa86a135b30d5
+generated parser.c and the external scanner, unchanged

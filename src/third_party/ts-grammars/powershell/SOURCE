@@ -1,0 +1,2 @@
+https://github.com/airbus-cert/tree-sitter-powershell tag v0.26.6 commit 65ea6919e816a7ac142acec7ee72757f89db8439
+generated parser.c and the external scanner, unchanged

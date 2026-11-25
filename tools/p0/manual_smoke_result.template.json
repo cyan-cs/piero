@@ -1,0 +1,29 @@
+{
+  "_comment": "Filled in by a person. Allowed results: PASS, FAIL, NOT_TESTED. Leave NOT_TESTED for anything you did not actually do. Do not edit 'expected'.",
+  "observer": "",
+  "terminal": { "host": "", "version": "", "shell": "", "shell_version": "" },
+  "keyboard": { "layout": "JIS or US", "ime": "name, and whether it was on/off per item" },
+  "items": [
+    { "id": "M01", "test": "P0-T01", "expected": "piero starts; alternate screen is entered; three-pane layout is drawn without stray characters", "result": "NOT_TESTED", "note": "" },
+    { "id": "M02", "test": "P0-T01", "expected": "j/k, h/l and arrow keys move; Enter enters a folder; Parent column follows", "result": "NOT_TESTED", "note": "" },
+    { "id": "M03", "test": "P0-T03", "expected": "Japanese and long file names: pane separators '|' stay in their columns on every row", "result": "NOT_TESTED", "note": "" },
+    { "id": "M04", "test": "P0-T07", "expected": "dragging the window size: screen redraws correctly, no residue, no flicker storm", "result": "NOT_TESTED", "note": "" },
+    { "id": "M05", "test": "P0-T01", "expected": "'.' toggles hidden files; '/' filter accepts typing, Backspace edits, Enter keeps, Esc clears", "result": "NOT_TESTED", "note": "" },
+    { "id": "M06", "test": "P0-T01", "expected": "Space selects and moves down; status bar shows 'selected N (visible V, hidden H)'; Esc clears selection", "result": "NOT_TESTED", "note": "" },
+    { "id": "M07", "test": "P0-T01", "expected": "'?' opens help; Esc closes it", "result": "NOT_TESTED", "note": "" },
+    { "id": "M08", "test": "P0-T05", "expected": "y on a synthetic file, go to ANOTHER disposable folder, p: copy completes; destination bytes and SHA-256 match the source", "result": "NOT_TESTED", "note": "" },
+    { "id": "M09", "test": "P0-T05", "expected": "y on a file, p in the SAME folder: preflight refuses the same-folder copy; original unchanged and no copy created", "result": "NOT_TESTED", "note": "" },
+    { "id": "M10", "test": "P0-T01", "expected": "q quits; cursor visible again, normal screen and scrollback intact, no leftover alternate-screen text", "result": "NOT_TESTED", "note": "" },
+    { "id": "M11", "test": "P0-T01", "expected": "Ctrl+C quits cleanly and restores the terminal", "result": "NOT_TESTED", "note": "" },
+    { "id": "M12", "test": "P0-T08", "expected": "closing the tab/window while piero runs: it closes promptly, no piero.exe left in Task Manager", "result": "NOT_TESTED", "note": "" },
+    { "id": "M13", "test": "P0-T02", "expected": "JIS keyboard, IME OFF: '/', '?', '.' work as commands", "result": "NOT_TESTED", "note": "" },
+    { "id": "M14", "test": "P0-T02", "expected": "IME ON: Japanese typed into the '/' filter arrives as the confirmed text; Esc leaves filter mode", "result": "NOT_TESTED", "note": "" },
+    { "id": "M15", "test": "P0-T05", "expected": "p0_terminal --mode confirm-test: hold 'x' for 2 s (real key repeat) -> modal opens, YES never fires from the repeats", "result": "NOT_TESTED", "note": "" },
+    { "id": "M16", "test": "P0-T05", "expected": "open the modal with 'x', mash 'Y' immediately: nothing fires in the first 300 ms; after that 'y' fires once", "result": "NOT_TESTED", "note": "" },
+    { "id": "M17", "test": "P0-T05", "expected": "Esc cancels the modal immediately, also inside the guard window", "result": "NOT_TESTED", "note": "" },
+    { "id": "M18", "test": "P0-T02", "expected": "IME ON with the modal armed: typing a Japanese character does not fire YES; the IME hint appears; Esc cancels", "result": "NOT_TESTED", "note": "" },
+    { "id": "M19", "test": "P0-T03", "expected": "width-matrix: the 'resynced' marker is in column 41 on EVERY row, whatever the text is", "result": "NOT_TESTED", "note": "write down which rows show a drifting 'naive' marker" },
+    { "id": "M20", "test": "P0-T04", "expected": "width-matrix: half-block row (▀▄█) renders as solid blocks with no gaps/overlap in this terminal", "result": "NOT_TESTED", "note": "" },
+    { "id": "M21", "test": "P0-T06", "expected": "confirm-test at 80x24, 60x20, 40x15, 40x12, 20x8: verb and destination visible; below 20x8 the full-screen 'CONFIRM: Y/N'", "result": "NOT_TESTED", "note": "" }
+  ]
+}

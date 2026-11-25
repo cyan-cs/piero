@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "markdown"
+version = "0.5.4"
+abi = 15
+library = "parser.dll"
+entrypoint = "tree_sitter_markdown"
+extensions = [".md", ".markdown"]
+query = "highlights.scm"
+release = "1.0.0"

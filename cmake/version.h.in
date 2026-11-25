@@ -1,0 +1,4 @@
+#ifndef WF_VERSION_H
+#define WF_VERSION_H
+#define WF_VERSION "@PIERO_VERSION@"
+#endif

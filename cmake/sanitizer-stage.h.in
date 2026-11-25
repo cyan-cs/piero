@@ -1,0 +1,6 @@
+#ifndef WF_SANITIZER_STAGE_CONFIG_H
+#define WF_SANITIZER_STAGE_CONFIG_H
+#define WF_SANITIZER_DLL L"@WF_ASAN_DLL_NAME@"
+#define WF_SANITIZER_SHA256 "@WF_SAN_RUNTIME_SHA@"
+static const char wf_sanitizer_manifest[] = "@WF_SAN_MANIFEST_C@";
+#endif

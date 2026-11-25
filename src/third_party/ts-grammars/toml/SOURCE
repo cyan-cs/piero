@@ -1,0 +1,2 @@
+https://github.com/tree-sitter-grammars/tree-sitter-toml tag v0.7.0 commit 64b56832c2cffe41758f28e05c756a3a98d16f41
+generated parser.c and the external scanner, unchanged

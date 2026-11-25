@@ -1,0 +1,2 @@
+https://github.com/tree-sitter/tree-sitter tag v0.27.2 commit 3fb7be49145acfb07e33b61ed5689e2b6771b2e9
+lib/src and lib/include only; the wasm stdlib is not taken, the wasm store is compiled as its stubs.

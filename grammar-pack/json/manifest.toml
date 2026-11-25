@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "json"
+version = "0.24.8"
+abi = 14
+library = "parser.dll"
+entrypoint = "tree_sitter_json"
+extensions = [".json", ".geojson", ".webmanifest"]
+query = "highlights.scm"
+release = "1.0.0"

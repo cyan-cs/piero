@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "bash"
+version = "0.25.1"
+abi = 15
+library = "parser.dll"
+entrypoint = "tree_sitter_bash"
+extensions = [".sh", ".bash"]
+query = "highlights.scm"
+release = "1.0.0"

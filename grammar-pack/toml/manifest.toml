@@ -1,0 +1,10 @@
+# piero grammar manifest. It describes the files next to it; it adds nothing:
+# piero-syntax.dll only loads what its own table of official grammars names.
+id = "toml"
+version = "0.7.0"
+abi = 14
+library = "parser.dll"
+entrypoint = "tree_sitter_toml"
+extensions = [".toml"]
+query = "highlights.scm"
+release = "1.0.0"

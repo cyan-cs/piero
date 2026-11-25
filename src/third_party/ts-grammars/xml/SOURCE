@@ -1,0 +1,2 @@
+https://github.com/tree-sitter-grammars/tree-sitter-xml tag v0.7.0 commit 4b64dd3a03ec002258d6268d712fd93716d6ab57
+generated parser.c and the external scanner, unchanged

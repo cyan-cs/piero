@@ -1,0 +1,97 @@
+# OS and editor-local files.
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Agent and machine-local configuration. Keep public examples trackable.
+.claude/
+.codex/
+.agents/
+.superpowers/
+/docs/superpowers/
+.aws/
+/.mcp.json
+/CMakeUserPresets.json
+
+# Local CMake/Ninja builds and isolated storage fixtures (never swept).
+/out/
+/build/
+/build-*/
+/cmake-build-*/
+
+# Local state, credentials and signing material.
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Accidental in-tree CMake/Ninja output. Keep CMakeLists and shared presets.
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+/Testing/
+/build.ninja
+/.ninja_deps
+/.ninja_log
+/Makefile
+/compile_commands.json
+
+# Compiler/linker output and crash dumps, not source or test fixtures.
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.dll
+*.exe
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.pch
+*.tlog
+*.dmp
+*.stackdump
+
+# Python helper caches.
+__pycache__/
+*.py[cod]
+
+# Keep evidence summaries/case CSVs, but leave bulky generated raw evidence local.
+/p0-results/*
+
+# Documentation, media, notices and compact evidence are public inputs.
+# Do not blanket-ignore docs/, *.txt, *.json, images, or editor backups (*~):
+# some are deliberate fixtures or retained originals. Ignore generated trees above.
+# Ignore rules do not untrack existing local configuration; use git rm --cached
+# only for reviewed paths, preserving the local files and existing history.
+
+/TODO.md
+
+# Captured terminal output of a manual run (the old entry had a "./" and matched nothing).
+/sixel-app-output.vt
+
+# Editor/language-server caches and merge or backup leftovers.
+/.cache/
+/.clangd/
+*.orig
+*.rej
+*.bak
+
+# Temporary files of the copy engine and of tests, if one is left behind in the tree.
+.wfcopy-*.tmp
+*.tmp
+
+# Crash and trace output of Windows (not the evidence under p0-results, which is listed above).
+*.etl
+*.wer
+
+CLAUDE.md
