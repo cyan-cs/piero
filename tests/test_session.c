@@ -222,11 +222,11 @@ static void every_kind_of_damage_is_refused_whole(void)
 		CHECK(WF_E_CORRUPT ==
 		        wf_session_decode(in_entry, sizeof in_entry - 1, &s));
 		CHECK(WF_E_CORRUPT ==
-		        wf_session_decode(in_value_end, sizeof in_value_end - 1,
-		                &s));
+		        wf_session_decode(
+		                in_value_end, sizeof in_value_end - 1, &s));
 		CHECK(WF_E_CORRUPT ==
-		        wf_session_decode(in_selected, sizeof in_selected - 1,
-		                &s));
+		        wf_session_decode(
+		                in_selected, sizeof in_selected - 1, &s));
 		CHECK(NULL == s.dir &&
 		        0 == s.n_selected); /* nothing is left to free */
 	}

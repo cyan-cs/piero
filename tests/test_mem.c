@@ -19,21 +19,26 @@ int main(void)
 		CHECK(NULL != p);
 		if (p) {
 			q = p;
-			CHECK(0xAB == q[0] && 0xAB == q[39]); /* contents kept */
+			CHECK(0xAB == q[0] &&
+			        0xAB == q[39]); /* contents kept */
 		}
 		free(p);
 	}
-	p = wf_malloc_array(0, sizeof(uint32_t)); /* like malloc(0): not an error to free */
+	p = wf_malloc_array(
+	        0, sizeof(uint32_t)); /* like malloc(0): not an error to free */
 	free(p);
 
 	/* a product that does not fit is refused, not wrapped */
-	CHECK(NULL == wf_malloc_array(SIZE_MAX / sizeof(uint64_t) + 1, sizeof(uint64_t)));
+	CHECK(NULL ==
+	        wf_malloc_array(
+	                SIZE_MAX / sizeof(uint64_t) + 1, sizeof(uint64_t)));
 	CHECK(NULL == wf_malloc_array(SIZE_MAX, 2));
 	CHECK(NULL == wf_malloc_array(SIZE_MAX / 2 + 1, 2));
 	CHECK(NULL == wf_malloc_array(2, SIZE_MAX));
 
 	/* the product 2^64 would wrap to 0 and "succeed" without the check */
-	CHECK(NULL == wf_malloc_array((size_t)1 << (sizeof(size_t) * 8 - 1), 2));
+	CHECK(NULL ==
+	        wf_malloc_array((size_t)1 << (sizeof(size_t) * 8 - 1), 2));
 
 	/* the largest count that fits is not refused by the CHECK itself: it is
 	 * the allocator that says no, for want of memory, and the old block of a

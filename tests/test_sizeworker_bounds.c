@@ -138,7 +138,8 @@ static void the_first_folder_is_not_leaked_when_it_cannot_be_queued(void)
 	/* and with memory, the same folder is counted */
 	memset(w.slots, 0, sizeof *w.slots);
 	count_folder(&w, 1, 0, dir);
-	CHECK(w.slots[0].finished && !w.slots[0].partial && WF_OK == w.slots[0].st);
+	CHECK(w.slots[0].finished && !w.slots[0].partial &&
+	        WF_OK == w.slots[0].st);
 	free(w.slots);
 	free(w.dirty);
 	CHECK(RemoveDirectoryW(dir));

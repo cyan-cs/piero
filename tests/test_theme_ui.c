@@ -552,7 +552,8 @@ static void the_unsaved_question_is_answered_without_letters(void)
 	key(&r.app, WF_KEY_ENTER);
 	CHECK(WF_SS_BROWSE == r.app.settings.sub &&
 	        &WF_MODE_SETTINGS == r.app.mode);
-	CHECK(WF_THEME_HEART == r.app.settings.draft.theme && 0 == r.port.saves);
+	CHECK(WF_THEME_HEART == r.app.settings.draft.theme &&
+	        0 == r.port.saves);
 
 	/* what an IME delivers in place of the letters answers nothing */
 	key(&r.app, WF_KEY_ESC);
@@ -564,7 +565,8 @@ static void the_unsaved_question_is_answered_without_letters(void)
 	r.app.mode->on_event(&r.app, &processed); /* 'd' handled by the IME */
 	CHECK(WF_SS_DISCARD == r.app.settings.sub &&
 	        &WF_MODE_SETTINGS == r.app.mode);
-	CHECK(WF_THEME_HEART == r.app.settings.draft.theme && 0 == r.port.saves);
+	CHECK(WF_THEME_HEART == r.app.settings.draft.theme &&
+	        0 == r.port.saves);
 
 	/* Up selects Discard, Enter discards: back to the saved theme */
 	key(&r.app, WF_KEY_UP);
@@ -1295,7 +1297,8 @@ static void a_preset_is_duplicated_before_it_is_edited(void)
 	CHECK(!strcmp(r.app.settings.input, "ight X\xE5\xA4\x9C"));
 	key(&r.app, WF_KEY_BACKSPACE);
 	key(&r.app, WF_KEY_RIGHT);
-	key(&r.app, WF_KEY_BACKSPACE); /* the whole character, not a byte of it */
+	key(&r.app,
+	        WF_KEY_BACKSPACE); /* the whole character, not a byte of it */
 	CHECK(!strcmp(r.app.settings.input, "ight "));
 	key(&r.app, WF_KEY_ESC);
 	CHECK(WF_SS_BROWSE == r.app.settings.sub);
@@ -1441,7 +1444,8 @@ static void licenses_and_about_show_real_texts(void)
 	CHECK(&WF_MODE_NORMAL == r.app.mode);
 
 	/* About is a quiet project page followed by the full legal text. */
-	r.app.settings_mem.valid = false; /* this part walks from the first row */
+	r.app.settings_mem.valid =
+	        false; /* this part walks from the first row */
 	ch(&r.app, ',');
 	key(&r.app, WF_KEY_LEFT);
 	key(&r.app, WF_KEY_DOWN);
@@ -1466,7 +1470,8 @@ static void licenses_and_about_show_real_texts(void)
 
 	/* in Japanese, the same screens */
 	wf_i18n_set_language(WF_UILANG_JA);
-	r.app.settings_mem.valid = false; /* this part walks from the first row */
+	r.app.settings_mem.valid =
+	        false; /* this part walks from the first row */
 	ch(&r.app, ',');
 	CHECK(screen_has(&r.app, 100, 30, "ライセンス") &&
 	        screen_has(&r.app, 100, 30, "キーボード"));
@@ -1505,7 +1510,8 @@ static void settings_draw_at_any_size(void)
 	t.color[1] = 0x445566;
 	CHECK(wf_config_custom_add(&r.config, "mine", "Mine", &t));
 	wf_app_set_license_dir(&r.app, L"C:\\no\\such\\folder");
-	r.app.settings_mem.valid = false; /* this part walks from the first row */
+	r.app.settings_mem.valid =
+	        false; /* this part walks from the first row */
 	ch(&r.app, ',');
 	r.app.settings.draft.keys.profile = WF_PROFILE_CUSTOM;
 	snprintf(r.app.settings.note, sizeof r.app.settings.note, "%s",

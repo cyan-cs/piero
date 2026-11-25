@@ -72,8 +72,8 @@ static bool feed(WfTerm *t, WORD vk, WORD scan, wchar_t ch, WfEvent *e)
 
 static void committed_text_arrives_as_characters(void)
 {
-	static const wchar_t text[] = {0x3053, 0x3093, 0x306B, 0x3061, 0x306F,
-	        0xFF21, 0x65E5};
+	static const wchar_t text[] = {
+	        0x3053, 0x3093, 0x306B, 0x3061, 0x306F, 0xFF21, 0x65E5};
 	/* ConPTY delivers committed text without a virtual key or scan code;
 	 * a classic console may report VK_PROCESSKEY. Both give plain characters. */
 	static const WORD vks[] = {0, VK_PROCESSKEY, VK_PACKET};
@@ -84,7 +84,8 @@ static void committed_text_arrives_as_characters(void)
 		WfEvent e;
 
 		for (i = 0; i < WF_ARRAY_LEN(text); i++) {
-			CHECK(feed(&t, vks[v], 0 == vks[v] ? 0 : 1, text[i], &e));
+			CHECK(feed(
+			        &t, vks[v], 0 == vks[v] ? 0 : 1, text[i], &e));
 			CHECK(WF_EV_CHAR == e.type && text[i] == e.ch);
 		}
 	}
@@ -153,7 +154,8 @@ static void conpty_alt_delivered_pair_is_one_character(void)
 		t.editing = 1 == mode; /* a text field is open, or not */
 		CHECK(!alt_unit(&t, 0, true, &e));
 		CHECK(!alt_unit(&t, 0xD842, false, &e));
-		CHECK(!alt_unit(&t, 0, true, &e)); /* the bare Alt must not drop it */
+		CHECK(!alt_unit(
+		        &t, 0, true, &e)); /* the bare Alt must not drop it */
 		CHECK(alt_unit(&t, 0xDFB7, false, &e));
 		CHECK(WF_EV_CHAR == e.type && 0x20BB7 == e.ch);
 	}
@@ -223,11 +225,13 @@ static void the_pointer_gives_presses_double_clicks_and_wheel_steps(void)
 	CHECK(WF_EV_MOUSE == e.type && 12 == WF_MOUSE_X(&e) &&
 	        7 == WF_MOUSE_Y(&e) && WF_MOUSE_LEFT == e.vk);
 	/* holding it, moving with it down, and letting go are not */
-	CHECK(!mouse_rec(&t, 13, 7, FROM_LEFT_1ST_BUTTON_PRESSED, MOUSE_MOVED, &e));
+	CHECK(!mouse_rec(
+	        &t, 13, 7, FROM_LEFT_1ST_BUTTON_PRESSED, MOUSE_MOVED, &e));
 	CHECK(!mouse_rec(&t, 13, 7, 0, 0, &e));
 	CHECK(!mouse_rec(&t, 14, 7, 0, MOUSE_MOVED, &e));
 	/* the second press of a double click */
-	CHECK(mouse_rec(&t, 12, 7, FROM_LEFT_1ST_BUTTON_PRESSED, DOUBLE_CLICK, &e));
+	CHECK(mouse_rec(
+	        &t, 12, 7, FROM_LEFT_1ST_BUTTON_PRESSED, DOUBLE_CLICK, &e));
 	CHECK((WF_MOUSE_LEFT | WF_MOUSE_DOUBLE) == e.vk);
 	CHECK(!mouse_rec(&t, 12, 7, 0, 0, &e));
 	/* the right button */
@@ -237,7 +241,8 @@ static void the_pointer_gives_presses_double_clicks_and_wheel_steps(void)
 	/* the wheel: the sign of the high word says which way */
 	CHECK(mouse_rec(&t, 3, 4, (DWORD)(120 << 16), MOUSE_WHEELED, &e));
 	CHECK(WF_MOUSE_WHEEL_UP == e.vk);
-	CHECK(mouse_rec(&t, 3, 4, (DWORD)((WORD)-120 << 16), MOUSE_WHEELED, &e));
+	CHECK(mouse_rec(
+	        &t, 3, 4, (DWORD)((WORD)-120 << 16), MOUSE_WHEELED, &e));
 	CHECK(WF_MOUSE_WHEEL_DOWN == e.vk);
 	/* the editor does not get the pointer */
 	t.editing = true;

@@ -212,7 +212,7 @@ static bool watch_case(Ev *e)
 	ok = delay >= 0;
 	ev_check(e, "watch_preview_follows_a_rewrite_that_looks_unchanged", 0,
 	        "the new text in the preview although size and time are the "
-		"same",
+	        "same",
 	        seen, ok);
 	if (!ok) {
 		goto done;

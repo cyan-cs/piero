@@ -396,8 +396,9 @@ static void down_scrolls_the_window_and_asks_for_more_once(void)
 	for (int i = 0; i < 24; i++) {
 		key(&a, WF_KEY_DOWN);
 	}
-	CHECK(23 == a.go.sel && 14 == a.go.top && 0 == f.mores); /* ten rows show */
-	key(&a, WF_KEY_DOWN); /* the end of what was read */
+	CHECK(23 == a.go.sel && 14 == a.go.top &&
+	        0 == f.mores); /* ten rows show */
+	key(&a, WF_KEY_DOWN);  /* the end of what was read */
 	CHECK(1 == f.mores && WF_GR_MORE == a.go.read);
 	key(&a, WF_KEY_DOWN); /* waiting: not asked twice */
 	CHECK(1 == f.mores);

@@ -662,7 +662,8 @@ static void wsl_git_works_in_its_own_distribution(void)
 	/* The folder name has a space, Japanese and the characters a shell or
 	 * wsl.exe could misread: it reaches wsl.exe as the --cd value. */
 	swprintf(dir, 512,
-	        L"\\\\wsl.localhost\\%ls\\tmp\\piero-git-test-%lu-a b\x65E5\x672C'q$x&y",
+	        L"\\\\wsl.localhost\\%ls\\tmp\\piero-git-test-%lu-a "
+	        L"b\x65E5\x672C'q$x&y",
 	        d, GetCurrentProcessId());
 	CHECK(WF_GENV_WSL == wf_gitenv_classify_text(dir, &e));
 	wf_git_hooks_set(NULL);

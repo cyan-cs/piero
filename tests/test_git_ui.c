@@ -664,23 +664,27 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 	a.root = _wcsdup(L"C:\\Users"); /* found one folder up */
 	CHECK(wf_app_on_git(&r.a, &a));
 	wf_gitanswer_free(&a);
-	CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter, orig,
-	        sizeof orig));
+	CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
+	        orig, sizeof orig));
 	CHECK('M' == letter);
 	/* into a folder below it: asked for the nearest .git, nothing hidden is shown */
 	free(r.a.cwd);
 	r.a.cwd = _wcsdup(L"C:\\Users\\dev\\Docs");
 	r.a.now_ms += 100;
 	wf_app_git_note_listing(&r.a, false);
-	CHECK(WF_GIT_REPO_LOCATE == r.mode && !wcscmp(r.last_root, L"C:\\Users\\dev\\Docs"));
-	CHECK(!wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter, orig,
-	        sizeof orig));
+	CHECK(WF_GIT_REPO_LOCATE == r.mode &&
+	        !wcscmp(r.last_root, L"C:\\Users\\dev\\Docs"));
+	CHECK(!wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
+	        orig, sizeof orig));
 	{
 		WfEntry stand_in;
 
 		memset(&stand_in, 0, sizeof stand_in);
-		stand_in.name = (wchar_t *)L"x.txt"; /* a file of the folder now shown */
-		CHECK(0 == wf_app_git_letter(&r.a, &stand_in)); /* hidden, not wrong */
+		stand_in.name = (wchar_t
+		                *)L"x.txt"; /* a file of the folder now shown */
+		CHECK(0 ==
+		        wf_app_git_letter(
+		                &r.a, &stand_in)); /* hidden, not wrong */
 	}
 	/* the folder is in the same repository: the letters are back, nothing else asked */
 	{
@@ -696,8 +700,8 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 		CHECK(wf_app_on_git(&r.a, &a));
 		wf_gitanswer_free(&a);
 		CHECK(asked == r.repos);
-		CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
-		        orig, sizeof orig));
+		CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt",
+		        &letter, orig, sizeof orig));
 		memset(&stand_in, 0, sizeof stand_in);
 		stand_in.name = (wchar_t *)L"x.txt";
 		CHECK('M' == wf_app_git_letter(&r.a, &stand_in));
@@ -723,8 +727,8 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 		        !wcscmp(r.last_root, L"C:\\Users\\dev\\Docs\\sub"));
 	}
 	/* the parent's table is not used for the nested repository's files */
-	CHECK(!wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter, orig,
-	        sizeof orig));
+	CHECK(!wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
+	        orig, sizeof orig));
 	wf_app_destroy(&r.a);
 }
 
@@ -753,7 +757,8 @@ static void a_status_due_with_a_folder_check_waits_for_the_check(void)
 	free(r.a.cwd);
 	r.a.cwd = _wcsdup(L"C:\\Users\\dev\\Docs");
 	wf_app_git_note_listing(&r.a, false);
-	CHECK(asked + 1 == r.repos && WF_GIT_REPO_LOCATE == r.mode); /* only the check */
+	CHECK(asked + 1 == r.repos &&
+	        WF_GIT_REPO_LOCATE == r.mode); /* only the check */
 	/* a timer that fires while the check is out asks nothing either */
 	r.a.git.due_ms = r.a.now_ms;
 	CHECK(!wf_app_git_tick(&r.a) && asked + 1 == r.repos);
@@ -768,8 +773,8 @@ static void a_status_due_with_a_folder_check_waits_for_the_check(void)
 	wf_gitanswer_free(&a);
 	CHECK(asked + 2 == r.repos && WF_GIT_REPO_PLAIN == r.mode);
 	/* the folder is verified: the letters of the table that was kept are shown */
-	CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter, orig,
-	        sizeof orig));
+	CHECK(wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
+	        orig, sizeof orig));
 	CHECK('M' == letter);
 	wf_app_destroy(&r.a);
 }
@@ -778,7 +783,8 @@ static void a_status_due_with_a_folder_check_waits_for_the_check(void)
  * knows for sure: before the folder is checked for a nearer .git, the parent's
  * root is not used (a nested repository's file would be "all new" against the
  * parent's HEAD, and it would stay so). The worker finds the repository then. */
-static void the_editor_does_not_use_a_parent_root_before_the_folder_is_checked(void)
+static void the_editor_does_not_use_a_parent_root_before_the_folder_is_checked(
+        void)
 {
 	static Rig r;
 	WfGitAnswer a;
@@ -811,7 +817,8 @@ static void the_editor_does_not_use_a_parent_root_before_the_folder_is_checked(v
 	CHECK(!wf_app_git_base_hint(&r.a, &env, file, &root, rel, sizeof rel,
 	        &expect_new, orig, sizeof orig));
 	/* a file of another environment or outside the root is never matched */
-	CHECK(WF_GENV_WINDOWS == wf_gitenv_classify_text(L"D:\\other\\f.c", &env));
+	CHECK(WF_GENV_WINDOWS ==
+	        wf_gitenv_classify_text(L"D:\\other\\f.c", &env));
 	r.a.git.vcwd = (free(r.a.git.vcwd), _wcsdup(r.a.cwd));
 	CHECK(!wf_app_git_base_hint(&r.a, &env, L"D:\\other\\f.c", &root, rel,
 	        sizeof rel, &expect_new, orig, sizeof orig));
@@ -829,17 +836,21 @@ static void a_reload_while_the_answer_is_awaited_is_asked_again_after_it(void)
 	wf_app_reload(&r.a);
 	CHECK(1 == r.repos);
 	r.a.now_ms += 400;
-	wf_app_git_note_listing(&r.a, true); /* the files changed; the answer is out */
+	wf_app_git_note_listing(
+	        &r.a, true); /* the files changed; the answer is out */
 	r.a.now_ms += 600;
 	wf_app_git_note_listing(&r.a, true);
-	CHECK(1 == r.repos); /* not cancelled, not asked a second time at once */
+	CHECK(1 ==
+	        r.repos); /* not cancelled, not asked a second time at once */
 	CHECK(UINT32_MAX == wf_app_git_timeout(&r.a));
 	r.a.now_ms += 2000;
 	a = ANSWER(r.last_gen, WF_GITR_OK,
 	        "1 .M N... 100644 100644 100644 a b file10.txt\0");
 	CHECK(wf_app_on_git(&r.a, &a)); /* what it saw may be old */
 	wf_gitanswer_free(&a);
-	CHECK(0 == wf_app_git_timeout(&r.a)); /* asked again at once: the gap has passed */
+	CHECK(0 ==
+	        wf_app_git_timeout(
+	                &r.a)); /* asked again at once: the gap has passed */
 	CHECK(!wf_app_git_tick(&r.a) && 2 == r.repos);
 	/* with no reload in between, nothing is asked again */
 	{

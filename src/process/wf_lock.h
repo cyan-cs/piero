@@ -99,7 +99,8 @@ typedef struct
 	bool has_window;
 	uint32_t session;
 	WfLockDeny close_deny; /* WF_DENY_NONE: closing may be tried */
-	WfLockDeny end_deny;   /* WF_DENY_NONE: termination may be tried; rechecked on action */
+	WfLockDeny
+	        end_deny; /* WF_DENY_NONE: termination may be tried; rechecked on action */
 } WfLockHolder;
 
 typedef struct
@@ -124,7 +125,7 @@ typedef enum
 typedef enum
 {
 	WF_LOCKRES_EXITED, /* the process is gone (verified on its handle) */
-	WF_LOCKRES_STILL,  /* exit not observed: timeout, cancellation or failed wait */
+	WF_LOCKRES_STILL, /* exit not observed: timeout, cancellation or failed wait */
 	WF_LOCKRES_DENIED, /* policy or identity refused it; see deny */
 	WF_LOCKRES_GONE, /* it was not running any more when the action began */
 	WF_LOCKRES_FAILED /* a system call failed; see error */

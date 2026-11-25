@@ -122,13 +122,15 @@ int main(void)
 		CHECK(WF_OK == wf_launch_checked(a, &ea->identity, dir, &err));
 		CHECK(1 == shell_calls && !wcscmp(shell_file, a));
 		/* the weak identity of another file is not this file's */
-		CHECK(WF_E_INVAL == wf_launch_checked(a, &eb->identity, dir, &err));
+		CHECK(WF_E_INVAL ==
+		        wf_launch_checked(a, &eb->identity, dir, &err));
 		/* nor is a proven identity claimed for a volume that has none */
 		strong = ea->identity;
 		strong.kind = WF_ID_STRONG;
 		CHECK(WF_E_INVAL == wf_launch_checked(a, &strong, dir, &err));
 		/* a folder is not opened */
-		CHECK(WF_OK != wf_launch_checked(sub, &es->identity, dir, &err));
+		CHECK(WF_OK !=
+		        wf_launch_checked(sub, &es->identity, dir, &err));
 		CHECK(1 == shell_calls);
 	}
 	wf_dir_free(d);

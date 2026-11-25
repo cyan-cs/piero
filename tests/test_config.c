@@ -48,7 +48,8 @@ static void editor_settings(void)
 	        0 == c.editor_show_whitespace);
 	CHECK(1 == c.editor_backup && 32 == c.editor_max_mib &&
 	        16 == c.editor_undo_mib);
-	CHECK(1 == c.editor_recovery_draft); /* drafts are on unless turned off */
+	CHECK(1 ==
+	        c.editor_recovery_draft); /* drafts are on unless turned off */
 
 	CHECK(parse(&c,
 	              "[editor]\nenabled = false\nkeymap = nano\ntab_width = "

@@ -336,7 +336,7 @@ static void test_pane_shows_the_digest_of_its_file(void)
 	CHECK(frame_row_has(f, 7,
 	        "SHA-256 "
 	        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015"
-		"ad"));
+	        "ad"));
 	CHECK(frame_row_has(f, 6, "row05"));
 	CHECK(!frame_row_has(f, 7, "row06"));
 

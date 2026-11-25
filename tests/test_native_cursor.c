@@ -102,7 +102,8 @@ static void field_follows_committed_text(WfApp *a, int expect_y_from_bottom)
 	size_t i;
 
 	CHECK(cursor_on_mark(a, &x0, &y0));
-	CHECK(expect_y_from_bottom <= 0 || y0 == a->rows - expect_y_from_bottom);
+	CHECK(expect_y_from_bottom <= 0 ||
+	        y0 == a->rows - expect_y_from_bottom);
 	for (i = 0; i < WF_ARRAY_LEN(TEXT); i++) {
 		ch(a, TEXT[i]);
 		CHECK(cursor_on_mark(a, &x, &y));

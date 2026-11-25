@@ -132,7 +132,8 @@ static void create_folder_and_rename(void)
 	ch(&a, 'R');
 	CHECK(!wcscmp(a.path_input, entry->name));
 	/* the name (not the extension) is selected: typing replaces it */
-	CHECK(a.path_input_selected && a.path_input_sel_end <= wcslen(entry->name));
+	CHECK(a.path_input_selected &&
+	        a.path_input_sel_end <= wcslen(entry->name));
 	key(&a, WF_KEY_END); /* leaves the selection; the text is kept */
 	CHECK(!a.path_input_selected && !wcscmp(a.path_input, entry->name));
 	type(&a, L"2");
@@ -244,7 +245,8 @@ static void receipts_are_reported_faithfully(void)
 	        {{WF_E_ACCESS, 5, false, NULL, NULL, 0}, "access denied"},
 	        {{WF_E_OS, 183, false, NULL, NULL, 0}, "already exists"},
 	        {{WF_E_OS, 80, false, NULL, NULL, 0}, "already exists"},
-	        {{WF_E_INVAL, 0, false, NULL, NULL, 0}, "changed since it was listed"},
+	        {{WF_E_INVAL, 0, false, NULL, NULL, 0},
+	                "changed since it was listed"},
 	        {{WF_E_INVAL, 0, false, "reserved device name", NULL, 0},
 	                "ERROR NAME: reserved device name"},
 	        {{WF_E_OS, 1117, false, NULL, NULL, 0}, "Win32 1117"},

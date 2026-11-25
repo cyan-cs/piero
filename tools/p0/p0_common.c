@@ -120,8 +120,9 @@ int p0_free_space_for(const wchar_t *dir, unsigned long long fixtures)
 	ULARGE_INTEGER avail;
 
 	if (!GetDiskFreeSpaceExW(dir, &avail, NULL, NULL)) {
-		fprintf(stderr, "cannot read the free space of the test volume "
-		                "(error %lu)\n",
+		fprintf(stderr,
+		        "cannot read the free space of the test volume "
+		        "(error %lu)\n",
 		        GetLastError());
 		return 0;
 	}

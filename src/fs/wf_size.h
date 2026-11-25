@@ -34,7 +34,8 @@ typedef struct
 	/* Incomplete: a limit, unreadable subtree or resource failure. Superseded
 	 * and cancelled requests stop publishing rather than delivering a final count. */
 	bool partial;
-	WfStatus st; /* first recorded error; a reached limit may still have WF_OK */
+	WfStatus
+	        st; /* first recorded error; a reached limit may still have WF_OK */
 } WfSizeUpdate;
 
 /*

@@ -307,7 +307,7 @@ static bool batch_rename_case(Ev *e)
 	        bt_file_is(g, L"delta.txt", "DELTA");
 	ev_check(e, "batch_undo_puts_every_name_and_content_back", 0,
 	        "alpha, beta, gamma hold their contents again; photo_* are "
-		"gone",
+	        "gone",
 	        ok ? "observed" : "WRONG", ok);
 	ok = ok && 2 == bt_journals(g, NULL) &&
 	        2 == bt_journals(g, "\nE SUCCESS*");

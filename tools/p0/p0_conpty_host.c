@@ -2684,7 +2684,6 @@ static bool product_themes(Product *pr)
 	pty_finish(&p);
 	drop_config(cfg);
 
-
 	PRODUCT_REQUIRE(theme_start(pr, &p, dir, false, L"en"));
 	ok = product_wait(
 	        &p, "Choose your language", pr->screen, sizeof pr->screen);
@@ -2756,7 +2755,6 @@ static bool product_themes(Product *pr)
 	WaitForSingleObject(p.pi.hProcess, 5000);
 	pty_finish(&p);
 	drop_config(cfg);
-
 
 	PRODUCT_REQUIRE(theme_start(pr, &p, dir, false, NULL));
 	ok = product_wait(&p, "Enter  ", pr->screen, sizeof pr->screen);

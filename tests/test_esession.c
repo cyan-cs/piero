@@ -34,7 +34,8 @@ typedef struct
 	FakeFile files[6];
 	WfSaveVerdict
 	        next_save; /* verdict for the next save (OK = really save) */
-	wchar_t kept_temp[260], kept_original[260]; /* what a failed save leaves */
+	wchar_t kept_temp[260],
+	        kept_original[260]; /* what a failed save leaves */
 	int saves, new_saves, loads;
 	char clip[512];
 	size_t clip_n;
@@ -148,7 +149,8 @@ static WfStatus fake_over(void *ctx,
 	if (WF_SV_OK != W.next_save) {
 		out->verdict = W.next_save;
 		out->reason = "fake refusal";
-		wcscpy_s(out->kept_temp, WF_ARRAY_LEN(out->kept_temp), W.kept_temp);
+		wcscpy_s(out->kept_temp, WF_ARRAY_LEN(out->kept_temp),
+		        W.kept_temp);
 		wcscpy_s(out->kept_original, WF_ARRAY_LEN(out->kept_original),
 		        W.kept_original);
 		W.next_save = WF_SV_OK;
@@ -235,7 +237,7 @@ static struct
 	bool present;
 	bool fail; /* the next writes fail */
 	int writes, removes;
-	int tries; /* writes asked for, failed or not */
+	int tries;      /* writes asked for, failed or not */
 	bool late_fail; /* the last write, taken in, failed afterwards (a worker) */
 } D;
 
@@ -266,11 +268,8 @@ static WfStatus fake_draft_write(void *ctx,
 	return WF_OK;
 }
 
-static WfStatus fake_draft_read(void *ctx,
-        const wchar_t *path,
-        WfEncoding *enc,
-        char **utf8,
-        size_t *n)
+static WfStatus fake_draft_read(
+        void *ctx, const wchar_t *path, WfEncoding *enc, char **utf8, size_t *n)
 {
 	(void)ctx;
 	if (!D.present || wcscmp(D.path, path)) {
@@ -610,7 +609,8 @@ static void pasted_text_fills_a_prompt_but_never_confirms_it(void)
 	ctrl('f');
 	CHECK(wf_es_prompt_active(S));
 	for (i = 0; i < 3; i++) {
-		WfEvent c = {WF_EV_CHAR, (uint32_t)"foo"[i], WF_KEY_NONE, WF_VK_PASTED};
+		WfEvent c = {WF_EV_CHAR, (uint32_t)"foo"[i], WF_KEY_NONE,
+		        WF_VK_PASTED};
 
 		wf_es_event(S, &c, ROWS, COLS);
 	}
@@ -631,7 +631,7 @@ static void pasted_text_fills_a_prompt_but_never_confirms_it(void)
 		WfEvent d = {WF_EV_CHAR, 'd', WF_KEY_NONE, WF_VK_PASTED};
 
 		wf_es_event(S, &d, ROWS, COLS);
-		CHECK(wf_es_prompt_active(S)); /* still asking */
+		CHECK(wf_es_prompt_active(S));   /* still asking */
 		CHECK(WF_ES_CLOSED == chr('d')); /* typed: answered */
 	}
 }
@@ -1425,8 +1425,7 @@ static int reversed_cells(const WfFrame *f, int *x, int *y)
 /* Draws at the given size; true when the cursor is shown, inside the frame
  * and on a reversed cell. In the text no other cell is reversed (one
  * insertion point); a prompt row may carry reversed key labels besides. */
-static bool cursor_cell(
-        int cols, int rows, bool only, int *cx, int *cy)
+static bool cursor_cell(int cols, int rows, bool only, int *cx, int *cy)
 {
 	WfFrame *f = wf_frame_new(cols, rows, &(WfStyle){0, 0, 0});
 	WfEvent resize = {WF_EV_RESIZE, 0, WF_KEY_NONE, 0};
@@ -1446,8 +1445,9 @@ static bool cursor_cell(
 		const WfCell *at = &f->cells[f->cursor.y * cols + f->cursor.x];
 
 		ok = (at->attributes & WF_ATTR_REVERSE) && at->width &&
-		        (!only || (1 == n && rx == f->cursor.x &&
-		                         ry == f->cursor.y));
+		        (!only ||
+		                (1 == n && rx == f->cursor.x &&
+		                        ry == f->cursor.y));
 	}
 	if (!ok) {
 		printf("  cursor visible=%d at %d,%d; reversed cell at %d,%d "
@@ -1492,15 +1492,17 @@ static void the_native_cursor_is_on_the_insertion_cell(void)
 		}
 		CHECK(cursor_on_insertion_cell(COLS, ROWS, &x, &y));
 		CHECK(y == y0 && x == expect);
-		CHECK(text_is("\xE6\x9C\x88\xE3\x81\x8C\xE3\x81\x8D\xE3\x82\x8C"
-		              "\xE3\x81\x84\xE3\x81\xA7\xE3\x81\x99\xE3\x81\xAD"));
+		CHECK(text_is(
+		        "\xE6\x9C\x88\xE3\x81\x8C\xE3\x81\x8D\xE3\x82\x8C"
+		        "\xE3\x81\x84\xE3\x81\xA7\xE3\x81\x99\xE3\x81\xAD"));
 
 		/* an emoji and a character outside the BMP (a surrogate pair) */
 		for (i = 0; i < WF_ARRAY_LEN(wide_more); i++) {
 			before_x = x;
 			chr(wide_more[i]);
 			CHECK(cursor_on_insertion_cell(COLS, ROWS, &x, &y));
-			CHECK(y == y0 && x == before_x + wf_cp_width(wide_more[i]));
+			CHECK(y == y0 &&
+			        x == before_x + wf_cp_width(wide_more[i]));
 		}
 
 		/* a new line: back to the left edge, one row down */
@@ -1568,8 +1570,8 @@ static void committed_japanese_is_saved_and_read_back(void)
 	static const char saved[] =
 	        "\xE6\x9C\x88\xE3\x81\x8C\xE3\x81\x8D\xE3\x82\x8C\xE3\x81\x84"
 	        "\xE3\x81\xA7\xE3\x81\x99\xE3\x81\xAD\xF0\xA0\xAE\xB7";
-	static const uint32_t typed[] = {0x6708, 0x304C, 0x304D, 0x308C,
-	        0x3044, 0x3067, 0x3059, 0x306D, 0x20BB7};
+	static const uint32_t typed[] = {0x6708, 0x304C, 0x304D, 0x308C, 0x3044,
+	        0x3067, 0x3059, 0x306D, 0x20BB7};
 	size_t i;
 	FakeFile *f;
 	int x, y;
@@ -1662,13 +1664,13 @@ static void the_save_question_is_answered_without_letters(void)
 static void ime_leftovers_are_not_answers(void)
 {
 	static const uint32_t not_answers[] = {
-	        0xFF53, /* fullwidth s */
-	        0xFF44, /* fullwidth d */
-	        0xFF43, /* fullwidth c */
-	        0xFF33, /* fullwidth S */
-	        0x3059, /* kana su: what the key s becomes */
-	        0x3067, /* kana de */
-	        0x3061, /* kana chi */
+	        0xFF53,  /* fullwidth s */
+	        0xFF44,  /* fullwidth d */
+	        0xFF43,  /* fullwidth c */
+	        0xFF33,  /* fullwidth S */
+	        0x3059,  /* kana su: what the key s becomes */
+	        0x3067,  /* kana de */
+	        0x3061,  /* kana chi */
 	        0x1F600, /* an emoji (a surrogate pair in UTF-16) */
 	        0x20BB7,
 	};
@@ -1681,7 +1683,8 @@ static void ime_leftovers_are_not_answers(void)
 	typing("!");
 	CHECK(WF_ES_REDRAW == ctrl('x'));
 	for (i = 0; i < WF_ARRAY_LEN(not_answers); i++) {
-		CHECK(WF_ES_NONE == chr(not_answers[i]) && wf_es_prompt_active(S));
+		CHECK(WF_ES_NONE == chr(not_answers[i]) &&
+		        wf_es_prompt_active(S));
 	}
 	/* a letter the IME was handling (VK_PROCESSKEY) answers nothing, in
 	 * either case, whatever it carries */
@@ -2311,7 +2314,8 @@ static void drafts_are_written_offered_and_removed(void)
 	CHECK(!D.present); /* nothing changed yet */
 	chr('x');
 	wf_es_save_drafts(S, 200);
-	CHECK(D.present && 1 == D.writes && 4 == D.n && !memcmp(D.text, "eep\n", 4));
+	CHECK(D.present && 1 == D.writes && 4 == D.n &&
+	        !memcmp(D.text, "eep\n", 4));
 	chr('x');
 	wf_es_save_drafts(S, 200 + 1000);
 	CHECK(1 == D.writes); /* not due yet */
@@ -2342,7 +2346,8 @@ static void drafts_are_written_offered_and_removed(void)
 	CHECK(screen_has("kept from last time"));
 	chr('r');
 	CHECK(text_is("draft text\n"));
-	CHECK(wf_ed_modified(wf_es_current(S))); /* not saved: the file is as it was */
+	CHECK(wf_ed_modified(
+	        wf_es_current(S))); /* not saved: the file is as it was */
 
 	/* ... and discard */
 	memset(&D, 0, sizeof D);
@@ -2424,14 +2429,15 @@ static void pasted_text_is_inserted_in_vim_normal_mode(void)
 		size_t i;
 
 		for (i = 0; pasted[i]; i++) {
-			WfEvent c = {WF_EV_CHAR, (uint32_t)pasted[i], WF_KEY_NONE,
-			        WF_VK_PASTED};
+			WfEvent c = {WF_EV_CHAR, (uint32_t)pasted[i],
+			        WF_KEY_NONE, WF_VK_PASTED};
 
 			wf_es_event(S, &c, ROWS, COLS);
 		}
 		{
 			WfEvent nl = {WF_EV_KEY, 0, WF_KEY_ENTER, WF_VK_PASTED};
-			WfEvent x = {WF_EV_CHAR, 'x', WF_KEY_NONE, WF_VK_PASTED};
+			WfEvent x = {
+			        WF_EV_CHAR, 'x', WF_KEY_NONE, WF_VK_PASTED};
 
 			wf_es_event(S, &nl, ROWS, COLS);
 			wf_es_event(S, &x, ROWS, COLS);
@@ -2890,9 +2896,11 @@ static void the_command_line_saves_and_quits_only_safely(void)
 
 		chr(':');
 		typing("q");
-		CHECK(WF_ES_REDRAW == key(WF_KEY_ENTER) && wf_es_prompt_active(S));
+		CHECK(WF_ES_REDRAW == key(WF_KEY_ENTER) &&
+		        wf_es_prompt_active(S));
 		CHECK(screen_has("Save changes to v.txt?"));
-		CHECK(WF_ES_REDRAW == key(WF_KEY_ENTER) && !wf_es_prompt_active(S));
+		CHECK(WF_ES_REDRAW == key(WF_KEY_ENTER) &&
+		        !wf_es_prompt_active(S));
 		CHECK(1 == wf_es_buffer_count(S) && saves_before == W.saves);
 	}
 	chr(':');

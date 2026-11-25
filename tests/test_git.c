@@ -1015,13 +1015,15 @@ static int helper_main(int argc, wchar_t **argv)
 		fflush(stderr);
 		return 0;
 	}
-	if (!wcscmp(mode, L"--forever")) { /* writes as fast as it can, to out or to err, until ended */
+	if (!wcscmp(mode,
+	            L"--forever")) { /* writes as fast as it can, to out or to err, until ended */
 		bool to_err = argc > 2 && !wcscmp(argv[2], L"err");
 		char block[4096];
 
 		memset(block, 'y', sizeof block);
 		for (;;) {
-			fwrite(block, 1, sizeof block, to_err ? stderr : stdout);
+			fwrite(block, 1, sizeof block,
+			        to_err ? stderr : stdout);
 			fflush(to_err ? stderr : stdout);
 		}
 	}
@@ -1291,24 +1293,30 @@ static void a_child_that_never_stops_writing_is_still_ended_on_time(void)
 
 	/* a time limit, with the errors flooding (they are kept only at the start) */
 	t0 = GetTickCount64();
-	CHECK(WF_E_TIMEOUT == run_self(to_err, NULL, 400, 1000, NULL, NULL, NULL, &r));
+	CHECK(WF_E_TIMEOUT ==
+	        run_self(to_err, NULL, 400, 1000, NULL, NULL, NULL, &r));
 	CHECK(GetTickCount64() - t0 < 3000);
 	wf_gitproc_result_free(&r);
 	/* a cancel, the same */
 	at = GetTickCount64() + 300;
 	t0 = GetTickCount64();
-	CHECK(WF_E_CANCELLED == run_self(to_err, NULL, 30000, 1000, cancel_after, &at, NULL, &r));
+	CHECK(WF_E_CANCELLED ==
+	        run_self(to_err, NULL, 30000, 1000, cancel_after, &at, NULL,
+	                &r));
 	CHECK(GetTickCount64() - t0 < 3000);
 	wf_gitproc_result_free(&r);
 	/* the output limit, with the output flooding: over it at once, nothing kept */
 	t0 = GetTickCount64();
-	CHECK(WF_E_RANGE == run_self(to_out, NULL, 30000, 1u << 20, NULL, NULL, NULL, &r));
+	CHECK(WF_E_RANGE ==
+	        run_self(to_out, NULL, 30000, 1u << 20, NULL, NULL, NULL, &r));
 	CHECK(GetTickCount64() - t0 < 3000);
 	CHECK(!r.out && 0 == r.out_n);
 	wf_gitproc_result_free(&r);
 	/* a time limit with the output flooding below its limit */
 	t0 = GetTickCount64();
-	CHECK(WF_E_TIMEOUT == run_self(to_out, NULL, 150, (size_t)1 << 30, NULL, NULL, NULL, &r));
+	CHECK(WF_E_TIMEOUT ==
+	        run_self(to_out, NULL, 150, (size_t)1 << 30, NULL, NULL, NULL,
+	                &r));
 	CHECK(GetTickCount64() - t0 < 3000);
 	wf_gitproc_result_free(&r);
 }

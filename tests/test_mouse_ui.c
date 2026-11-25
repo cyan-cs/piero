@@ -267,7 +267,8 @@ static void the_wheel_scrolls_a_window_and_never_closes_it(void)
 	CHECK(wf_app_window_wheel(&a, &up, &act) && 0 == a.help.sel &&
 	        &WF_MODE_HELP == a.mode);
 	/* a click in a window is not a wheel: it is left alone */
-	CHECK(!wf_app_window_wheel(&a, &click, &act) && &WF_MODE_HELP == a.mode);
+	CHECK(!wf_app_window_wheel(&a, &click, &act) &&
+	        &WF_MODE_HELP == a.mode);
 
 	wf_app_joblog_begin(&a);
 	CHECK(wf_app_window_wheel(&a, &down, &act) &&

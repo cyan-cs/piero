@@ -364,7 +364,8 @@ static int judge_last(const WfImageResult *res, uint32_t last_gen)
  * up, and the host given up on with it; what must hold is that nothing arrives
  * out of order, the last request is answered with the picture (not with "the
  * decoder stopped"), and the host is still one that decodes. */
-static void a_storm_of_requests_for_a_big_picture_ends_with_the_last_answered(void)
+static void a_storm_of_requests_for_a_big_picture_ends_with_the_last_answered(
+        void)
 {
 	WfImageWorker *w = start_worker(NULL);
 	wchar_t path[MAX_PATH * 2];
@@ -384,8 +385,8 @@ static void a_storm_of_requests_for_a_big_picture_ends_with_the_last_answered(vo
 	path_of(L"storm.png", path);
 	for (uint32_t g = 1; g <= last_gen; g++) {
 		uint32_t side = 40 + (g * 37) % 400;
-		WfImageRequest rq = request(g, path, WF_DKIND_IMAGE, side,
-		        side / 2 + 5, 0);
+		WfImageRequest rq =
+		        request(g, path, WF_DKIND_IMAGE, side, side / 2 + 5, 0);
 
 		CHECK(WF_OK == port.submit(port.ctx, &rq));
 		Sleep(15 + (g % 4) * 15);

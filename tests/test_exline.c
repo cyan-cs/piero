@@ -24,20 +24,24 @@ static void sort_and_set_take_what_they_are_given(void)
 	        !e.descending);
 	CHECK(parse_fm("set hidden on", &e) && e.on);
 	CHECK(parse_fm("set hidden off", &e) && !e.on);
-	CHECK(!parse_fm("set hidden \"\"", &e) && WF_EXE_MISSING_ARG == e.error);
+	CHECK(!parse_fm("set hidden \"\"", &e) &&
+	        WF_EXE_MISSING_ARG == e.error);
 }
 
 static void nothing_after_an_empty_word_is_skipped(void)
 {
 	WfEx e;
 
-	CHECK(!parse_fm("sort name asc garbage", &e) && WF_EXE_TRAILING == e.error);
+	CHECK(!parse_fm("sort name asc garbage", &e) &&
+	        WF_EXE_TRAILING == e.error);
 	CHECK(!parse_fm("sort name asc \"\" garbage", &e) &&
 	        WF_EXE_TRAILING == e.error);
-	CHECK(!parse_fm("sort name asc \"\"", &e) && WF_EXE_TRAILING == e.error);
+	CHECK(!parse_fm("sort name asc \"\"", &e) &&
+	        WF_EXE_TRAILING == e.error);
 	CHECK(!parse_fm("sort name \"\" garbage", &e) &&
 	        WF_EXE_TRAILING == e.error);
-	CHECK(!parse_fm("sort name \"\" asc", &e) && WF_EXE_TRAILING == e.error);
+	CHECK(!parse_fm("sort name \"\" asc", &e) &&
+	        WF_EXE_TRAILING == e.error);
 	CHECK(!parse_fm("set hidden on garbage", &e) &&
 	        WF_EXE_TRAILING == e.error);
 	CHECK(!parse_fm("set hidden on \"\" garbage", &e) &&

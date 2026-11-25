@@ -233,7 +233,6 @@ static bool start_in(WfApp *a, FakePort *fp, const wchar_t *dir)
 	return ok;
 }
 
-
 /* A WSL folder can be changed: create and rename are not refused, and copy,
  * move and delete go through the edit port one item at a time. */
 static void copy_in_a_distribution_goes_through_the_edit_port(void)
@@ -242,7 +241,8 @@ static void copy_in_a_distribution_goes_through_the_edit_port(void)
 	FakePort fp = {.app = &a};
 	Spy spy = {0};
 	WfEditOutcome ok = {WF_OK, 0, true, NULL, NULL, 0};
-	WfEditOutcome taken = {WF_E_INVAL, 0, false, NULL, "that name is taken", 0};
+	WfEditOutcome taken = {
+	        WF_E_INVAL, 0, false, NULL, "that name is taken", 0};
 
 	CHECK(start_in(&a, &fp, ME));
 	wf_app_set_edit(&a, (WfEditPort){&spy, spy_submit});
@@ -281,7 +281,8 @@ static void a_move_stays_inside_one_distribution(void)
 	wf_app_cmd_stage(&a, true);
 	CHECK(a.wclip.move);
 
-	cwd_is(&a, L"\\\\wsl.localhost\\Debian\\home"); /* another distribution */
+	cwd_is(&a,
+	        L"\\\\wsl.localhost\\Debian\\home"); /* another distribution */
 	wf_app_cmd_paste(&a);
 	CHECK(0 == spy.calls && strstr(a.msg, "between places"));
 	cwd_is(&a, L"C:\\Users\\dev"); /* a local folder */
@@ -292,7 +293,8 @@ static void a_move_stays_inside_one_distribution(void)
 	wf_app_cmd_paste(&a);
 	CHECK(1 == spy.calls && WF_EDIT_MOVE == spy.kind &&
 	        !wcscmp(spy.parent, ME) &&
-	        !wcscmp(spy.dest, L"\\\\wsl.localhost\\Ubuntu\\home\\me\\Docs"));
+	        !wcscmp(spy.dest,
+	                L"\\\\wsl.localhost\\Ubuntu\\home\\me\\Docs"));
 	wf_app_on_edit(&a, spy.gen, &ok, L"a.txt");
 	CHECK(strstr(a.msg, "MOVE done: 1") && 0 == a.wclip.n);
 	wf_app_destroy(&a);
@@ -313,7 +315,8 @@ static void copies_cross_between_a_distribution_and_a_local_folder(void)
 	cwd_is(&a, L"C:\\Users\\dev");
 	wf_app_cmd_paste(&a);
 	CHECK(1 == spy.calls && WF_EDIT_WSL_COPY == spy.kind &&
-	        !wcscmp(spy.parent, ME) && !wcscmp(spy.dest, L"C:\\Users\\dev"));
+	        !wcscmp(spy.parent, ME) &&
+	        !wcscmp(spy.dest, L"C:\\Users\\dev"));
 	wf_app_on_edit(&a, spy.gen, &ok, L"a.txt");
 	wf_app_destroy(&a);
 
@@ -328,7 +331,8 @@ static void copies_cross_between_a_distribution_and_a_local_folder(void)
 	cwd_is(&a, ME);
 	wf_app_cmd_paste(&a);
 	CHECK(1 == spy.calls && WF_EDIT_WSL_COPY == spy.kind &&
-	        !wcscmp(spy.parent, L"C:\\Users\\dev") && !wcscmp(spy.dest, ME));
+	        !wcscmp(spy.parent, L"C:\\Users\\dev") &&
+	        !wcscmp(spy.dest, ME));
 	wf_app_on_edit(&a, spy.gen, &ok, L"file2.txt");
 	CHECK(strstr(a.msg, "COPY done: 1"));
 
@@ -410,12 +414,14 @@ static void undo_puts_back_a_rename_a_create_and_a_move(void)
 	{
 		WfEvent end = {WF_EV_KEY, 0, WF_KEY_END, 0};
 
-		a.mode->on_event(&a, &end); /* leave the selected name: append */
+		a.mode->on_event(
+		        &a, &end); /* leave the selected name: append */
 	}
 	ch(&a, 'X');
 	enter(&a);
 	CHECK(1 == spy.calls && WF_EDIT_RENAME == spy.kind &&
-	        !wcscmp(spy.old_name, L"a.txt") && !wcscmp(spy.new_name, L"a.txtX"));
+	        !wcscmp(spy.old_name, L"a.txt") &&
+	        !wcscmp(spy.new_name, L"a.txtX"));
 	wf_app_on_edit(&a, spy.gen, &ok, L"a.txtX");
 	CHECK(a.wundo.valid);
 	wf_app_cmd_undo(&a);
@@ -449,7 +455,8 @@ static void undo_puts_back_a_rename_a_create_and_a_move(void)
 	CHECK(a.wundo.valid && 1 == a.wundo.n);
 	wf_app_cmd_undo(&a);
 	CHECK(6 == spy.calls && WF_EDIT_MOVE == spy.kind &&
-	        !wcscmp(spy.parent, L"\\\\wsl.localhost\\Ubuntu\\home\\me\\Docs") &&
+	        !wcscmp(spy.parent,
+	                L"\\\\wsl.localhost\\Ubuntu\\home\\me\\Docs") &&
 	        !wcscmp(spy.dest, ME) && !wcscmp(spy.old_name, L"b.txt"));
 	wf_app_on_edit(&a, spy.gen, &ok, L"b.txt");
 	CHECK(!a.wundo.valid);

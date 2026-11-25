@@ -382,8 +382,10 @@ static void the_sort_menu_and_nano_keys_work(void)
 		CHECK(NULL != small);
 		r.app.mode->draw(&r.app, small);
 		for (int i = 0; i < 30; i++) {
-			any |= ' ' != small->cells[i].utf8[0]; /* the first row */
-			hint |= ' ' != small->cells[5 * 30 + i].utf8[0]; /* the last */
+			any |= ' ' !=
+			        small->cells[i].utf8[0]; /* the first row */
+			hint |= ' ' !=
+			        small->cells[5 * 30 + i].utf8[0]; /* the last */
 		}
 		CHECK(any && hint);
 		wf_frame_free(small);
@@ -395,7 +397,8 @@ static void the_sort_menu_and_nano_keys_work(void)
 	CHECK(&WF_MODE_SORT == r.app.mode && WF_SORT_SIZE == r.app.sort_key &&
 	        WF_SORT_SIZE == r.app.sort_pick);
 	key(&r.app, WF_KEY_DOWN); /* date */
-	CHECK(WF_SORT_DATE == r.app.sort_pick && WF_SORT_SIZE == r.app.sort_key);
+	CHECK(WF_SORT_DATE == r.app.sort_pick &&
+	        WF_SORT_SIZE == r.app.sort_key);
 	key(&r.app, WF_KEY_UP);
 	key(&r.app, WF_KEY_UP); /* name */
 	CHECK(WF_SORT_NAME == r.app.sort_pick);

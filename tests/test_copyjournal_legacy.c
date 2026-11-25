@@ -24,7 +24,10 @@ static WfLegacyJournalReport analyze(const char *text)
  * without its "gone" record, and an intent for each. The counts are exact. */
 static void long_journal(void)
 {
-	enum { N = 60000 };
+	enum
+	{
+		N = 60000
+	};
 	size_t cap = (size_t)N * 3 * 120, at = 0;
 	char *buf = malloc(cap);
 	WfLegacyJournalReport r;

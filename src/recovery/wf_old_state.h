@@ -21,7 +21,7 @@ typedef struct
 	bool copy_legacy;    /* receipt inventory in the old format */
 	bool copy_invalid;   /* receipt inventory unreadable or damaged */
 	bool receipts; /* receipts are listed (an inventory, not a proof) */
-	bool drafts;   /* draft-folder entries exist, or their presence could not be checked */
+	bool drafts; /* draft-folder entries exist, or their presence could not be checked */
 } WfStateReport;
 
 /* The recovery store under `root`. A store that is not there counts nothing. */

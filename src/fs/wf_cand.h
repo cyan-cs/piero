@@ -25,8 +25,9 @@ typedef struct
 {
 	uint32_t gen; /* the request this answers */
 	WfStatus st;
-	unsigned long error; /* captured Win32 error when available; 0 otherwise */
-	size_t n;            /* items[0..n) */
+	unsigned long
+	        error; /* captured Win32 error when available; 0 otherwise */
+	size_t n;      /* items[0..n) */
 	WfCandItem items[WF_CAND_BATCH];
 	/* The folder has not been read to its end: asking for more may find
 	 * more. False once the end was seen. */

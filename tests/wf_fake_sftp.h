@@ -35,7 +35,7 @@ typedef struct
 	Fault fault;
 	int after;
 	int requests;
-	size_t piece; /* bytes per read() call: 0 = all that is there */
+	size_t piece;     /* bytes per read() call: 0 = all that is there */
 	unsigned slow_ms; /* real time each read() takes */
 	uint8_t in[70000];
 	size_t in_n;

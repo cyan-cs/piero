@@ -380,7 +380,8 @@ static void many_threads_at_the_first_use_agree(void)
 	for (int i = 0; i < RACERS; i++) {
 		t[i] = CreateThread(NULL, 0, racer, NULL, 0, NULL);
 	}
-	SetEvent(g_go); /* all at once, before anything else has used the table */
+	SetEvent(
+	        g_go); /* all at once, before anything else has used the table */
 	WaitForMultipleObjects(RACERS, t, TRUE, 30000);
 	for (int i = 0; i < RACERS; i++) {
 		CloseHandle(t[i]);

@@ -19,8 +19,9 @@
 
 static inline bool wf_weak_unsupported(DWORD error)
 {
-	return ERROR_INVALID_PARAMETER == error || ERROR_NOT_SUPPORTED == error ||
-	        ERROR_INVALID_LEVEL == error || ERROR_INVALID_FUNCTION == error;
+	return ERROR_INVALID_PARAMETER == error ||
+	        ERROR_NOT_SUPPORTED == error || ERROR_INVALID_LEVEL == error ||
+	        ERROR_INVALID_FUNCTION == error;
 }
 
 /* The volume of `h` is FAT, FAT32 or exFAT. */
@@ -28,7 +29,8 @@ static inline bool wf_weak_volume(HANDLE h)
 {
 	wchar_t fs[16] = L"";
 
-	return GetVolumeInformationByHandleW(h, NULL, 0, NULL, NULL, NULL, fs, 16) &&
+	return GetVolumeInformationByHandleW(
+	               h, NULL, 0, NULL, NULL, NULL, fs, 16) &&
 	        (0 == _wcsicmp(fs, L"FAT") || 0 == _wcsicmp(fs, L"FAT32") ||
 	                0 == _wcsicmp(fs, L"exFAT"));
 }
@@ -42,7 +44,8 @@ static inline bool wf_weak_is_root(HANDLE h)
 		wchar_t room[4];
 	} name;
 
-	return GetFileInformationByHandleEx(h, FileNameInfo, &name, sizeof name) &&
+	return GetFileInformationByHandleEx(
+	               h, FileNameInfo, &name, sizeof name) &&
 	        sizeof(wchar_t) == name.info.FileNameLength &&
 	        L'\\' == name.info.FileName[0];
 }
@@ -100,13 +103,15 @@ static inline bool wf_handle_identity_any(HANDLE h, WfFileId *out, DWORD *error)
 /* The attributes of the open object. FAT answers FileAttributeTagInfo with an
  * invalid-parameter error, and the older call says the same attributes. Any
  * other failure is a failure. */
-static inline bool wf_handle_attributes(HANDLE h, DWORD *attributes, DWORD *error)
+static inline bool wf_handle_attributes(
+        HANDLE h, DWORD *attributes, DWORD *error)
 {
 	FILE_ATTRIBUTE_TAG_INFO tag;
 	BY_HANDLE_FILE_INFORMATION info;
 	DWORD err;
 
-	if (GetFileInformationByHandleEx(h, FileAttributeTagInfo, &tag, sizeof tag)) {
+	if (GetFileInformationByHandleEx(
+	            h, FileAttributeTagInfo, &tag, sizeof tag)) {
 		*attributes = tag.FileAttributes;
 		return true;
 	}

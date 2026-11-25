@@ -375,7 +375,8 @@ a_save_replaces_the_file_and_keeps_what_belongs_to_it(void)
 		CHECK(has_content(second, "new\r\ntext\r\nmore\r\n", 17));
 		CHECK(INVALID_FILE_ATTRIBUTES != GetFileAttributesW(backup));
 		track(L"doc.txt~2");
-		CHECK(DeleteFileW(backup)); /* this fixture's already checked original */
+		CHECK(DeleteFileW(
+		        backup)); /* this fixture's already checked original */
 		CHECK(DeleteFileW(second));
 	}
 	wf_efile_loaded_free(&l);
@@ -521,7 +522,8 @@ __declspec(noinline) static void every_replacement_retains_one_original(void)
 		r = save_over(L"b.txt", &l.stamp, "v4", utf8, false);
 		track(L"b.txt~3");
 		CHECK(WF_SV_OK == r.verdict && r.backup_made &&
-		        has_content(path, "v4", 2) && has_content(bak3, "v3", 2));
+		        has_content(path, "v4", 2) &&
+		        has_content(bak3, "v3", 2));
 		CHECK(has_content(bak, "v1", 2) && has_content(bak2, "v2", 2));
 	}
 	wf_efile_loaded_free(&l);
@@ -1003,7 +1005,8 @@ static void a_refused_save_says_what_refused_it(void)
 	wf_efile_set_journal(jp);
 	r = save_over(L"why.txt", &l.stamp, "new text", utf8, false);
 	CHECK(WF_SV_IO == r.verdict && ERROR_SHARING_VIOLATION == r.error);
-	CHECK(r.reason && strstr(r.reason, "could not be opened for recording"));
+	CHECK(r.reason &&
+	        strstr(r.reason, "could not be opened for recording"));
 	CHECK(has_content(path, "original", 8) && 0 == temporaries());
 	if (INVALID_HANDLE_VALUE != hold) {
 		CloseHandle(hold);
@@ -1152,7 +1155,8 @@ static void nine_backups_stop_the_save(void)
 	r = save_over(L"nine.txt", &l.stamp, "v2", utf8, true);
 	CHECK(WF_SV_UNSAFE == r.verdict && !r.backup_made);
 	CHECK(has_content(path, "v1", 2)); /* the file is as it was */
-	for (unsigned n = 1; n <= 9; n++) { /* and every backup is still there */
+	for (unsigned n = 1; n <= 9;
+	        n++) { /* and every backup is still there */
 		if (1 == n) {
 			swprintf(name, 1100, L"%ls~", path);
 		} else {
@@ -1237,7 +1241,9 @@ static void wsl_files_are_saved_in_place(void)
 	first = l.stamp;
 	wf_efile_loaded_free(&l);
 
-	CHECK(WF_OK == wf_efile_save_over(p, &first, "new text", 8, utf8, NULL, &r) &&
+	CHECK(WF_OK ==
+	                wf_efile_save_over(
+	                        p, &first, "new text", 8, utf8, NULL, &r) &&
 	        WF_SV_OK == r.verdict);
 	CHECK(has_content(p, "new text", 8) && has_content(b, "old", 3));
 	CHECK(r.backup_made && r.stamp.valid && 8 == r.stamp.size);
@@ -1268,17 +1274,18 @@ static void wsl_files_are_saved_in_place(void)
 		}
 		first = r.stamp;
 		CHECK(WF_OK ==
-		                wf_efile_save_over(
-		                        p, &first, "tenth", 5, utf8, NULL, &r) &&
-		        WF_SV_UNSAFE == r.verdict && has_content(p, "again", 5));
+		                wf_efile_save_over(p, &first, "tenth", 5, utf8,
+		                        NULL, &r) &&
+		        WF_SV_UNSAFE == r.verdict &&
+		        has_content(p, "again", 5));
 		for (unsigned i = 2; i <= 9; i++) {
 			swprintf(n, 1100, L"%ls~%u", p, i);
 			DeleteFileW(n);
 		}
 		/* with room again it goes through */
 		CHECK(WF_OK ==
-		                wf_efile_save_over(
-		                        p, &first, "tenth", 5, utf8, NULL, &r) &&
+		                wf_efile_save_over(p, &first, "tenth", 5, utf8,
+		                        NULL, &r) &&
 		        WF_SV_OK == r.verdict && has_content(p, "tenth", 5));
 		swprintf(n, 1100, L"%ls~2", p);
 		DeleteFileW(n);
@@ -1288,8 +1295,9 @@ static void wsl_files_are_saved_in_place(void)
 	/* changed elsewhere since it was read: refused, backup not made */
 	DeleteFileW(b);
 	CHECK(write_raw(p, "ELSEWHERE", 9));
-	CHECK(WF_OK == wf_efile_save_over(
-	                       p, &first, "mine", 4, utf8, NULL, &r) &&
+	CHECK(WF_OK ==
+	                wf_efile_save_over(
+	                        p, &first, "mine", 4, utf8, NULL, &r) &&
 	        WF_SV_CONFLICT == r.verdict);
 	CHECK(has_content(p, "ELSEWHERE", 9));
 	CHECK(INVALID_FILE_ATTRIBUTES == GetFileAttributesW(b));
@@ -1300,8 +1308,9 @@ static void wsl_files_are_saved_in_place(void)
 	first = l.stamp;
 	wf_efile_loaded_free(&l);
 	CHECK(write_raw(p, "xzy", 3));
-	CHECK(WF_OK == wf_efile_save_over(
-	                       p, &first, "mine", 4, utf8, NULL, &r) &&
+	CHECK(WF_OK ==
+	                wf_efile_save_over(
+	                        p, &first, "mine", 4, utf8, NULL, &r) &&
 	        WF_SV_CONFLICT == r.verdict);
 	CHECK(has_content(p, "xzy", 3));
 
@@ -1310,14 +1319,16 @@ static void wsl_files_are_saved_in_place(void)
 	first = l.stamp;
 	wf_efile_loaded_free(&l);
 	SetFileAttributesW(p, FILE_ATTRIBUTE_READONLY);
-	CHECK(WF_OK == wf_efile_save_over(
-	                       p, &first, "mine", 4, utf8, NULL, &r) &&
+	CHECK(WF_OK ==
+	                wf_efile_save_over(
+	                        p, &first, "mine", 4, utf8, NULL, &r) &&
 	        WF_SV_UNSAFE == r.verdict);
 	SetFileAttributesW(p, FILE_ATTRIBUTE_NORMAL);
 	CHECK(has_content(p, "xzy", 3));
 	DeleteFileW(p);
-	CHECK(WF_OK == wf_efile_save_over(
-	                       p, &first, "mine", 4, utf8, NULL, &r) &&
+	CHECK(WF_OK ==
+	                wf_efile_save_over(
+	                        p, &first, "mine", 4, utf8, NULL, &r) &&
 	        WF_SV_GONE == r.verdict);
 	CHECK(INVALID_FILE_ATTRIBUTES == GetFileAttributesW(p));
 

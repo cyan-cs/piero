@@ -56,16 +56,19 @@ static void weak_and_proven_identities_do_not_meet(void)
 	wf_weak_fill(&w3, 7, 0x400240);
 	/* proven with proven, as ever */
 	CHECK(wf_fileid_equal(&p, &p) && !wf_fileid_equal(&p, &q));
-	CHECK(wf_fileid_equal_or_weak(&p, &p) && !wf_fileid_equal_or_weak(&p, &q));
+	CHECK(wf_fileid_equal_or_weak(&p, &p) &&
+	        !wf_fileid_equal_or_weak(&p, &q));
 	/* weak with weak: the same entry on the same volume */
-	CHECK(wf_fileid_equal_or_weak(&w, &w2) && !wf_fileid_equal_or_weak(&w, &w3));
+	CHECK(wf_fileid_equal_or_weak(&w, &w2) &&
+	        !wf_fileid_equal_or_weak(&w, &w3));
 	w2.volume = 8;
 	CHECK(!wf_fileid_equal_or_weak(&w, &w2));
 	/* never across: not by the strict test, not by the other, same bytes or not */
 	CHECK(!wf_fileid_equal(&w, &w));
 	p = w;
 	p.kind = WF_ID_STRONG; /* the same bytes, claimed as proven */
-	CHECK(!wf_fileid_equal_or_weak(&w, &p) && !wf_fileid_equal_or_weak(&p, &w));
+	CHECK(!wf_fileid_equal_or_weak(&w, &p) &&
+	        !wf_fileid_equal_or_weak(&p, &w));
 	/* an identity of no kind meets nothing, itself included */
 	memset(&p, 0, sizeof p);
 	CHECK(!wf_fileid_equal(&p, &p) && !wf_fileid_equal_or_weak(&p, &p));

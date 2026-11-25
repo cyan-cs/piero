@@ -1447,7 +1447,7 @@ static bool gate_made_private(Gate *g, const wchar_t *state)
 		ok = gate_check(g, what,
 		             gate_privacy(path, &p) && gate_is_private(&p),
 		             "owner only, no inherited rights, one entry, a "
-			     "folder") &&
+		             "folder") &&
 		        ok;
 	}
 	return ok;
@@ -1544,7 +1544,7 @@ static bool gate_first_run_foreign(Ev *e, const char *refusal)
 	        gate_check(g, "no_working_directory_or_logs_in_it",
 	                !file_exists(cwd) && !file_exists(logs),
 	                "no cwd and no logs were made in a folder it cannot "
-			"trust");
+	                "trust");
 done:
 	return gate_first_run_end(g, e, ok, fails);
 }

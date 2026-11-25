@@ -166,7 +166,8 @@ static void test_filter_ignores_case_beyond_ascii(void)
 	WfView v;
 	WfDir *d = wf_dir_new();
 	const wchar_t a_umlaut[] = {0x00C4, L'r', L'g', L'e', L'r', 0};
-	const wchar_t cyr[] = {0x041F, 0x0440, 0x0438, 0x0432, 0x0435, 0x0442, 0};
+	const wchar_t cyr[] = {
+	        0x041F, 0x0440, 0x0438, 0x0432, 0x0435, 0x0442, 0};
 	const wchar_t wide[] = {0xFF21, 0xFF22, L'.', L't', 0};
 	const wchar_t q_umlaut[] = {0x00E4, L'R', L'G', 0};
 	const wchar_t q_cyr[] = {0x043F, 0x0420, 0x0418, 0};

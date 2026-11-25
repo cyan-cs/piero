@@ -164,10 +164,11 @@ static void help_wraps_on_a_narrow_screen(void)
 	FakePort fn = {.app = &narrow}, fw = {.app = &wide};
 	WfEvent end = {WF_EV_KEY, 0, WF_KEY_END, 0};
 
-	CHECK(WF_OK == wf_app_init(&narrow, 44, 20, fake_port(&fn),
-	                       L"C:\\Users\\dev"));
-	CHECK(WF_OK == wf_app_init(&wide, 120, 20, fake_port(&fw),
-	                       L"C:\\Users\\dev"));
+	CHECK(WF_OK ==
+	        wf_app_init(
+	                &narrow, 44, 20, fake_port(&fn), L"C:\\Users\\dev"));
+	CHECK(WF_OK ==
+	        wf_app_init(&wide, 120, 20, fake_port(&fw), L"C:\\Users\\dev"));
 	wf_app_help_begin(&narrow);
 	wf_app_help_begin(&wide);
 	(void)narrow.mode->on_event(&narrow, &end);
@@ -195,8 +196,8 @@ static void a_long_report_scrolls_on_a_small_screen(void)
 	WfEvent other = {WF_EV_CHAR, 'x', WF_KEY_NONE, 0};
 	WfFrame *f;
 
-	CHECK(WF_OK == wf_app_init(&app, 44, 10, fake_port(&fp),
-	                       L"C:\\Users\\dev"));
+	CHECK(WF_OK ==
+	        wf_app_init(&app, 44, 10, fake_port(&fp), L"C:\\Users\\dev"));
 	for (int i = 0; i < WF_REPORT_LINES; i++) {
 		snprintf(app.report[i], sizeof app.report[i], "line %d", i);
 	}
@@ -224,8 +225,8 @@ static void details_keep_their_line_across_a_resize(void)
 	FakePort fp = {.app = &app};
 	WfEvent resize = {WF_EV_RESIZE, 0, WF_KEY_NONE, 0};
 
-	CHECK(WF_OK == wf_app_init(&app, 100, 12, fake_port(&fp),
-	                       L"C:\\Users\\dev"));
+	CHECK(WF_OK ==
+	        wf_app_init(&app, 100, 12, fake_port(&fp), L"C:\\Users\\dev"));
 	wf_app_info_begin(&app);
 	/* ten lines of 90 characters: one row each at 100 columns, two at 50 */
 	app.info.n = 10;

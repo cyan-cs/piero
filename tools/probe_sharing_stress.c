@@ -59,7 +59,8 @@ typedef struct
 	unsigned rename_attempt; /* 1-based commit rename that failed first */
 	char file_id[48];  /* volume serial : file id of the renamed folder */
 	char holders[400]; /* Restart Manager's answer at that instant */
-	char open_children[160]; /* children another opener holds without delete sharing */
+	char open_children
+	        [160]; /* children another opener holds without delete sharing */
 } FirstFailure;
 
 static FirstFailure first;
@@ -102,8 +103,8 @@ static void held_children(const wchar_t *dir, char *out, size_t cap)
 	if (swprintf(pattern, _countof(pattern), L"%ls\\*", dir) < 0) {
 		return;
 	}
-	find = FindFirstFileExW(pattern, FindExInfoBasic, &fd,
-	        FindExSearchNameMatch, NULL, 0);
+	find = FindFirstFileExW(
+	        pattern, FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
 	if (INVALID_HANDLE_VALUE == find) {
 		snprintf(out, cap, "list(%lu)", GetLastError());
 		return;
@@ -113,7 +114,8 @@ static void held_children(const wchar_t *dir, char *out, size_t cap)
 		HANDLE h;
 		DWORD error;
 
-		if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) {
+		if (!wcscmp(fd.cFileName, L".") ||
+		        !wcscmp(fd.cFileName, L"..")) {
 			continue;
 		}
 		seen++;
@@ -122,7 +124,8 @@ static void held_children(const wchar_t *dir, char *out, size_t cap)
 			continue;
 		}
 		h = CreateFileW(child, DELETE, 0, NULL, OPEN_EXISTING,
-		        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+		        FILE_FLAG_BACKUP_SEMANTICS |
+		                FILE_FLAG_OPEN_REPARSE_POINT,
 		        NULL);
 		if (INVALID_HANDLE_VALUE != h) {
 			CloseHandle(h);
@@ -132,7 +135,8 @@ static void held_children(const wchar_t *dir, char *out, size_t cap)
 		held++;
 		if (n + 24 < cap) {
 			n += (size_t)snprintf(out + n, cap - n, "%s%lu;",
-			        ERROR_SHARING_VIOLATION == error ? "held:" : "err:",
+			        ERROR_SHARING_VIOLATION == error ? "held:"
+			                                         : "err:",
 			        error);
 		}
 	} while (FindNextFileW(find, &fd));
@@ -685,8 +689,9 @@ int wmain(int argc, wchar_t **argv)
 	               : NULL;
 	printf("watcher=%s\n",
 	        !watch ? "off (control)"
-	               : attribute_only ? "attributes-only (no restart manager)"
-	                                : "restart-manager");
+	                : attribute_only
+	                ? "attributes-only (no restart manager)"
+	                : "restart-manager");
 	for (unsigned i = 0; i < iterations; i++) {
 		t.iterations++;
 		(void)run_one(&lab, &ops, journal, i, files, &t);

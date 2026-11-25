@@ -385,7 +385,11 @@ static void utf16_carets_preserve_scalars(void)
 static void cluster_steps(void)
 {
 	/* e + combining acute, a, thumbs up + skin tone, a bad byte, z */
-	const char t[] = "e\xCC\x81" "a" "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD" "\xFF" "z";
+	const char t[] = "e\xCC\x81"
+	                 "a"
+	                 "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"
+	                 "\xFF"
+	                 "z";
 	size_t n = sizeof t - 1;
 
 	CHECK(3 == wf_utf8_cluster_next(t, n, 0));

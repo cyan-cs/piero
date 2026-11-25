@@ -306,7 +306,7 @@ static bool images_case(Ev *e)
 	}
 	ev_check(e, "images_fast_navigation_settles_on_the_last_picture", 0,
 	        "8 passes over 300 pictures: the last row's picture, no stale "
-		"one",
+	        "one",
 	        all ? "observed" : "WRONG", all);
 	if (!all) {
 		goto done;
@@ -472,7 +472,7 @@ static bool images_case(Ev *e)
 		}
 		ev_check(e, "images_resize_storm_leaves_a_sound_screen", 0,
 		        "2 x 40 resizes: alive, the picture drawn at the final "
-			"size",
+		        "size",
 		        all ? "observed" : "WRONG", all);
 		if (!all) {
 			goto done;
@@ -517,9 +517,9 @@ static bool images_case(Ev *e)
 		res_line(&rep, "after_cycle_8", &end_s);
 		ev_check(e, "images_decoder_cycles_leave_nothing_behind", 0,
 		        "8 cycles: the decoder process gone after each idle "
-			"time; "
+		        "time; "
 		        "threads and handles (4 more at most) and private "
-			"bytes (4 "
+		        "bytes (4 "
 		        "MiB) as after the 2nd",
 		        ok ? "observed" : "WRONG", ok);
 		if (!ok) {

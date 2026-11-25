@@ -80,7 +80,7 @@ static void refusals_are_told_apart_and_a_changed_key_is_never_unknown(void)
 	        wf_ssh_classify(255,
 	                "Host key for box has changed and you have requested "
 	                "strict checking.\r\nHost key verification "
-			"failed.\r\n"));
+	                "failed.\r\n"));
 	CHECK(WF_SSH_FAIL_AUTH ==
 	        wf_ssh_classify(
 	                255, "u@box: Permission denied (publickey).\r\n"));

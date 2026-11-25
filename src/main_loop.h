@@ -165,7 +165,7 @@ typedef struct
 	        session_due; /* when the changes gathered are handed over; 0: none */
 	WfSessionDedupe
 	        session_last; /* what was handed over last, to skip a repeat */
-	bool session_told; /* a failed save was said once */
+	bool session_told;    /* a failed save was said once */
 	WfApp app;
 	bool app_ready;
 	WfFrame *prev; /* what the terminal shows; NULL: repaint every cell */

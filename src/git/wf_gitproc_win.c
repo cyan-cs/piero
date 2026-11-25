@@ -127,7 +127,8 @@ static wchar_t *build_command(const wchar_t *exe, const wchar_t *const *args)
 	for (size_t i = 0; args && args[i]; i++) {
 		line[at++] = L' ';
 		if (needs_quotes(args[i])) {
-			ok = wf_terminal_quote_arg(args[i], line + at, cap - at);
+			ok = wf_terminal_quote_arg(
+			        args[i], line + at, cap - at);
 		} else {
 			ok = 0 == wcscpy_s(line + at, cap - at, args[i]);
 		}

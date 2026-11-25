@@ -48,7 +48,8 @@ static void failed_items_are_offered_again(void)
 
 	memset(&r, 0, sizeof r);
 	memset(&fail, 0, sizeof fail);
-	fail.path = dup(L"C:\\src\\folder\\deep\\x.bin"); /* inside the folder */
+	fail.path =
+	        dup(L"C:\\src\\folder\\deep\\x.bin"); /* inside the folder */
 	fail.kind = WF_CF_WRITE_FAILED;
 	fail.error = 5;
 	r.job = 7;

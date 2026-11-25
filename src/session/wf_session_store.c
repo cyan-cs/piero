@@ -15,7 +15,7 @@ struct WfSessionStore
 {
 	wchar_t slot[2][PATH_MAX_UNITS];
 	wchar_t lock_file[PATH_MAX_UNITS];
-	HANDLE lock;  /* INVALID_HANDLE_VALUE until locked */
+	HANDLE lock; /* INVALID_HANDLE_VALUE until locked */
 	WfStatus
 	        write_error; /* WF_OK, or why existing data must be preserved */
 };
@@ -110,8 +110,8 @@ typedef enum
 	PEEK_ABSENT, /* missing or empty */
 	PEEK_FAILED, /* an existing header could not be opened/read */
 	PEEK_OURS,   /* starts with this version's magic */
-	PEEK_NEWER,  /* "piero-session N" with another N, including older versions */
-	PEEK_OTHER   /* something else */
+	PEEK_NEWER, /* "piero-session N" with another N, including older versions */
+	PEEK_OTHER /* something else */
 } Peek;
 
 /* The first line of a slot file, to tell "newer version" from "damaged". */

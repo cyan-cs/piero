@@ -18,7 +18,8 @@ static bool fail_growth;
 
 static void *test_realloc(void *p, size_t n)
 {
-	if (fail_growth && 4096 == n) { /* the first growth of a pipe's buffer */
+	if (fail_growth &&
+	        4096 == n) { /* the first growth of a pipe's buffer */
 		return NULL;
 	}
 	return realloc(p, n);
@@ -28,7 +29,8 @@ static void *test_realloc(void *p, size_t n)
 #include "../src/git/wf_gitproc_win.c"
 #undef realloc
 
-static WfStatus run_cmd(const wchar_t *script, size_t max_out, WfGitRunResult *r)
+static WfStatus run_cmd(
+        const wchar_t *script, size_t max_out, WfGitRunResult *r)
 {
 	wchar_t exe[MAX_PATH + 32], sys[MAX_PATH];
 	const wchar_t *args[] = {L"/c", script, NULL};

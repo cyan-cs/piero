@@ -581,30 +581,39 @@ static void collision_dialog_offers_skip_and_localizes_old_overwrite_refusal(
 		CHECK(strstr(r.app.confirm.armed_text, "[O]") &&
 		        strstr(r.app.confirm.armed_text, "[K]"));
 		CHECK(has(&r.app, 100, 30, i ? "[S] スキップ" : "[S] Skip"));
-		CHECK(has(&r.app, 100, 30, i ? "[K] 両方残す" : "[K] Keep both"));
+		CHECK(has(
+		        &r.app, 100, 30, i ? "[K] 両方残す" : "[K] Keep both"));
 		/* Overwrite is final: the dialog says the old file skips the
 		 * Recycle Bin and is deleted, and nothing is cut off */
 		CHECK(strstr(r.app.confirm.armed_text,
 		        i ? "[Esc] 中止" : "[Esc] Cancel"));
 		CHECK(!strcmp(r.app.confirm.armed_text,
 		        wf_msg(MSG_XFER_COLLIDE_KEYS)));
-		CHECK(!strcmp(r.app.confirm.lines[2], wf_msg(MSG_XFER_COLLIDE_1)));
-		CHECK(!strcmp(r.app.confirm.lines[3], wf_msg(MSG_XFER_COLLIDE_2)));
-		CHECK(!strcmp(r.app.confirm.lines[4], wf_msg(MSG_XFER_COLLIDE_3)));
-		CHECK(!strcmp(r.app.confirm.lines[5], wf_msg(MSG_XFER_COLLIDE_4)));
-		CHECK(!strcmp(r.app.confirm.lines[6], wf_msg(MSG_XFER_COLLIDE_5)));
+		CHECK(!strcmp(
+		        r.app.confirm.lines[2], wf_msg(MSG_XFER_COLLIDE_1)));
+		CHECK(!strcmp(
+		        r.app.confirm.lines[3], wf_msg(MSG_XFER_COLLIDE_2)));
+		CHECK(!strcmp(
+		        r.app.confirm.lines[4], wf_msg(MSG_XFER_COLLIDE_3)));
+		CHECK(!strcmp(
+		        r.app.confirm.lines[5], wf_msg(MSG_XFER_COLLIDE_4)));
+		CHECK(!strcmp(
+		        r.app.confirm.lines[6], wf_msg(MSG_XFER_COLLIDE_5)));
 		CHECK(7 == r.app.confirm.n);
 		CHECK(has(&r.app, 100, 30,
-		        i ? "上書きはごみ箱を使いません" : "does NOT use the Recycle Bin"));
+		        i ? "上書きはごみ箱を使いません"
+		          : "does NOT use the Recycle Bin"));
 		CHECK(has(&r.app, 100, 30,
 		        i ? "完全に削除します" : "deleted for good"));
 		/* the same lines whole on an 80x24 and a 60x20 terminal */
 		CHECK(has(&r.app, 80, 24,
 		        i ? "置かれたら古いファイルは完全に削除します。"
-		          : "copy is in place, the old file is deleted for good."));
+		          : "copy is in place, the old file is deleted for "
+		            "good."));
 		CHECK(has(&r.app, 60, 20,
 		        i ? "置かれたら古いファイルは完全に削除します。"
-		          : "copy is in place, the old file is deleted for good."));
+		          : "copy is in place, the old file is deleted for "
+		            "good."));
 		CHECK(has(&r.app, 60, 20, i ? "[Esc] 中止" : "[Esc] Cancel"));
 		ch(&r.app, 'O');
 		/* the choice is taken; with no checker wired the job cannot start

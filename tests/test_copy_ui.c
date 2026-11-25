@@ -289,7 +289,8 @@ static void a_confirmed_check_starts_a_copy_job(void)
 			CHECK(wf_utf8_cells(wf_buf_cstr(&s), s.len) <= room);
 			CHECK(strstr(wf_buf_cstr(&s), "1/3 files") &&
 			        strstr(wf_buf_cstr(&s), "[z pause, C cancel]"));
-			if (45 == room) { /* no room left for a name: none is shown */
+			if (45 ==
+			        room) { /* no room left for a name: none is shown */
 				CHECK(!strstr(wf_buf_cstr(&s), "a-"));
 			}
 			wf_buf_free(&s);
@@ -675,8 +676,8 @@ static void delete_asks_and_sends_the_selection_to_the_bin(void)
 	r.app.cur.dir->e[1].identity.kind = WF_ID_NONE;
 	ch(&r.app, 'j');
 	key(&r.app, WF_KEY_DELETE);
-	CHECK(&WF_MODE_NORMAL == r.app.mode &&
-	        strstr(r.app.msg, "unproven") && 0 == r.copy.submits);
+	CHECK(&WF_MODE_NORMAL == r.app.mode && strstr(r.app.msg, "unproven") &&
+	        0 == r.copy.submits);
 	wf_app_destroy(&r.app);
 
 	/* with no engine Delete keeps stopping at the gate */
@@ -1274,8 +1275,10 @@ static void the_backups_window_lists_what_sits_beside_the_file(void)
 	rig_open(&r, true, true);
 	/* the backups, in the listing the app shows */
 	CHECK(WF_OK == wf_dir_add(r.app.cur.dir, L"file2.txt~", 10, 0, 18, 18));
-	CHECK(WF_OK == wf_dir_add(r.app.cur.dir, L"file2.txt~3", 11, 0, 17, 17));
-	CHECK(WF_OK == wf_dir_add(r.app.cur.dir, L"file2.txt~10", 12, 0, 16, 16));
+	CHECK(WF_OK ==
+	        wf_dir_add(r.app.cur.dir, L"file2.txt~3", 11, 0, 17, 17));
+	CHECK(WF_OK ==
+	        wf_dir_add(r.app.cur.dir, L"file2.txt~10", 12, 0, 16, 16));
 	for (size_t i = 0; i < r.app.cur.dir->n; i++) {
 		WfEntry *e = &r.app.cur.dir->e[i];
 
@@ -1290,9 +1293,12 @@ static void the_backups_window_lists_what_sits_beside_the_file(void)
 	ch(&r.app, 'B'); /* the cursor is on a folder first */
 	CHECK(&WF_MODE_NORMAL == r.app.mode && strstr(r.app.msg, "file"));
 	r.app.msg[0] = 0;
-	for (size_t i = 0; i < r.app.cur.nvis; i++) { /* file10.txt: no backups */
-		if (!wcscmp(r.app.cur.dir->e[r.app.cur.vis[i]].name, L"file10.txt")) {
-			wf_view_move(&r.app.cur, (long)i - (long)r.app.cur.cursor, 10);
+	for (size_t i = 0; i < r.app.cur.nvis;
+	        i++) { /* file10.txt: no backups */
+		if (!wcscmp(r.app.cur.dir->e[r.app.cur.vis[i]].name,
+		            L"file10.txt")) {
+			wf_view_move(&r.app.cur,
+			        (long)i - (long)r.app.cur.cursor, 10);
 		}
 	}
 	ch(&r.app, 'B');
@@ -1387,8 +1393,8 @@ static void the_job_log_keeps_every_failure_with_its_path(void)
 	for (size_t i = 0; i < 40; i++) {
 		wchar_t path[400];
 
-		swprintf(path, 400, L"C:\\Users\\%ls%zu", i == 5 ? longname : L"f",
-		        i);
+		swprintf(path, 400, L"C:\\Users\\%ls%zu",
+		        i == 5 ? longname : L"f", i);
 		res.fail_all[i].path = _wcsdup(path);
 		res.fail_all[i].kind = WF_CF_EXISTS;
 		res.fail_all[i].error = 80;
@@ -1419,7 +1425,8 @@ static void the_job_log_keeps_every_failure_with_its_path(void)
 		wf_app_on_copy_result(&r.app, &ok);
 	}
 	CHECK(WF_JOBLOG_MAX == r.app.jobs.n &&
-	        r.app.jobs.log[WF_JOBLOG_MAX - 1].job == 100 + WF_JOBLOG_MAX + 2);
+	        r.app.jobs.log[WF_JOBLOG_MAX - 1].job ==
+	                100 + WF_JOBLOG_MAX + 2);
 	wf_app_destroy(&r.app);
 }
 
@@ -1724,7 +1731,8 @@ static void a_rename_and_a_new_folder_have_rows_in_the_history(void)
 	key(&r.app, WF_KEY_ENTER);
 	wf_app_on_edit(&r.app, r.spy.gen, &denied, renamed);
 	CHECK(0 == r.app.jobs.n);
-	prove_listing(&r.app, 7); /* the listing was read again after the answer */
+	prove_listing(
+	        &r.app, 7); /* the listing was read again after the answer */
 	ch(&r.app, 'R');
 	key(&r.app, WF_KEY_END);
 	type(&r.app, L"2");

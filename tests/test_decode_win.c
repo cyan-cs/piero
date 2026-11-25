@@ -309,12 +309,15 @@ static void why_a_decoder_could_not_be_made_is_told_apart(void)
 
 	/* the bytes look like a picture and WIC does not know the format: damaged */
 	CHECK(WF_DSTAT_CORRUPT ==
-	        wf_decode_open_failure(WINCODEC_ERR_UNKNOWNIMAGEFORMAT, png, 13));
+	        wf_decode_open_failure(
+	                WINCODEC_ERR_UNKNOWNIMAGEFORMAT, png, 13));
 	/* the codec is not there: the picture is fine, this PC cannot show it */
 	CHECK(WF_DSTAT_UNSUPPORTED ==
-	        wf_decode_open_failure(WINCODEC_ERR_COMPONENTNOTFOUND, png, 13));
+	        wf_decode_open_failure(
+	                WINCODEC_ERR_COMPONENTNOTFOUND, png, 13));
 	CHECK(WF_DSTAT_UNSUPPORTED ==
-	        wf_decode_open_failure(WINCODEC_ERR_COMPONENTNOTFOUND, webp, 16));
+	        wf_decode_open_failure(
+	                WINCODEC_ERR_COMPONENTNOTFOUND, webp, 16));
 	CHECK(WF_DSTAT_UNSUPPORTED ==
 	        wf_decode_open_failure(
 	                WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT, png, 13));
@@ -325,8 +328,8 @@ static void why_a_decoder_could_not_be_made_is_told_apart(void)
 	        wf_decode_open_failure(E_OUTOFMEMORY, webp, 16));
 	/* not like any picture: not a format we show */
 	CHECK(WF_DSTAT_UNSUPPORTED ==
-	        wf_decode_open_failure(
-	                WINCODEC_ERR_UNKNOWNIMAGEFORMAT, words, sizeof words - 1));
+	        wf_decode_open_failure(WINCODEC_ERR_UNKNOWNIMAGEFORMAT, words,
+	                sizeof words - 1));
 	/* any other failure on a picture-looking file is damage */
 	CHECK(WF_DSTAT_CORRUPT ==
 	        wf_decode_open_failure(WINCODEC_ERR_BADHEADER, png, 13));
@@ -353,8 +356,8 @@ static void a_bitmap_that_claims_to_be_enormous_is_refused(void)
 	 * format this PC lacks */
 	CHECK(WF_DSTAT_CORRUPT == st);
 	/* what starts like no picture at all is still "not a format we show" */
-	st = wf_decode_image("just words, not a picture at all", 32, 100, 100, &pm,
-	        NULL);
+	st = wf_decode_image(
+	        "just words, not a picture at all", 32, 100, 100, &pm, NULL);
 	CHECK(WF_DSTAT_UNSUPPORTED == st && NULL == pm);
 }
 

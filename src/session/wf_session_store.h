@@ -28,9 +28,9 @@ void wf_session_store_close(WfSessionStore *s); /* NULL-safe; frees the lock */
 
 typedef enum
 {
-	WF_SESSION_NONE,       /* both slots are missing or empty */
-	WF_SESSION_FOUND,      /* `*out` holds it */
-	WF_SESSION_DAMAGED,    /* something is there that cannot be read */
+	WF_SESSION_NONE,    /* both slots are missing or empty */
+	WF_SESSION_FOUND,   /* `*out` holds it */
+	WF_SESSION_DAMAGED, /* something is there that cannot be read */
 	WF_SESSION_UNSUPPORTED /* header names a different version: left as it is */
 } WfSessionFound;
 

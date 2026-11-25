@@ -21,8 +21,8 @@ struct WfDraftWriter
 {
 	WfWorkCore core;
 	CONDITION_VARIABLE
-	        settled; /* a write ended, or a waiting text was dropped */
-	Job q[DW_MAX];   /* guarded by core.lock, with all that follows */
+	settled;       /* a write ended, or a waiting text was dropped */
+	Job q[DW_MAX]; /* guarded by core.lock, with all that follows */
 	size_t nq;
 	const wchar_t *busy; /* the path being written now (the job's own) */
 	wchar_t *failed

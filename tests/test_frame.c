@@ -252,7 +252,8 @@ static void test_native_cursor(void)
 	CHECK(WF_OK == wf_present_diff(NULL, a, &out));
 	CHECK(has(&out, "\x1b[?25h") && has(&out, "\x1b[1;1H"));
 	wf_buf_clear(&out);
-	CHECK(WF_OK == wf_present_diff(NULL, b, &out) && has(&out, "\x1b[?25l"));
+	CHECK(WF_OK == wf_present_diff(NULL, b, &out) &&
+	        has(&out, "\x1b[?25l"));
 
 	/* a resize clears the screen and redraws: state is stated again */
 	{

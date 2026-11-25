@@ -143,21 +143,26 @@ int wmain(int argc, wchar_t **argv)
 		CHECK(p0_lab_path(&lab, L"both1.log", log1, 1024) &&
 		        p0_lab_path(&lab, L"both2.log", log2, 1024));
 		/* an ID that neither store has changes nothing and says so */
-		CHECK(3 == run(argv[1],
-		                   L"99999999-9999-9999-9999-999999999999",
-		                   "99999999-9999-9999-9999-999999999999\n",
-		                   log1));
-		CHECK(INVALID_FILE_ATTRIBUTES != GetFileAttributesW(old_object) &&
-		        INVALID_FILE_ATTRIBUTES != GetFileAttributesW(new_object));
+		CHECK(3 ==
+		        run(argv[1], L"99999999-9999-9999-9999-999999999999",
+		                "99999999-9999-9999-9999-999999999999\n",
+		                log1));
+		CHECK(INVALID_FILE_ATTRIBUTES !=
+		                GetFileAttributesW(old_object) &&
+		        INVALID_FILE_ATTRIBUTES !=
+		                GetFileAttributesW(new_object));
 		/* the older record is found and a wrong confirmation keeps it */
 		CHECK(p0_lab_path(&lab, L"both3.log", log1, 1024));
 		CHECK(3 == run(argv[1], second, "wrong\n", log1));
-		CHECK(INVALID_FILE_ATTRIBUTES != GetFileAttributesW(old_object));
+		CHECK(INVALID_FILE_ATTRIBUTES !=
+		        GetFileAttributesW(old_object));
 		/* the exact ID abandons it, and only it */
-		CHECK(0 == run(argv[1], second,
-		                   "22222222-2222-2222-2222-222222222222\n",
-		                   log2));
-		CHECK(INVALID_FILE_ATTRIBUTES == GetFileAttributesW(old_object));
+		CHECK(0 ==
+		        run(argv[1], second,
+		                "22222222-2222-2222-2222-222222222222\n",
+		                log2));
+		CHECK(INVALID_FILE_ATTRIBUTES ==
+		        GetFileAttributesW(old_object));
 		CHECK(p0_sha256_file(new_object, old_hash) &&
 		        !strcmp(new_hash, old_hash));
 		CHECK(SetEnvironmentVariableW(L"LOCALAPPDATA", saved));

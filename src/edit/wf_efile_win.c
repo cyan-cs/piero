@@ -696,9 +696,9 @@ static WfStatus journal_refusal(WfSaveResult *out,
 		case WF_EFJ_FORMAT:
 			return sv(out, WF_SV_UNSAFE, 0,
 			        "an old or unknown operation history is kept "
-				"for "
+			        "for "
 			        "review (Settings > About): replacing saves "
-				"are "
+			        "are "
 			        "locked; original unchanged");
 		case WF_EFJ_NO_STATE:
 			return sv(out, WF_SV_IO, journal_gate_error,
@@ -1074,7 +1074,7 @@ static WfStatus wsl_save_over(const wchar_t *path,
 	if (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
 		s = sv(out, WF_SV_UNSAFE, 0,
 		        "the name is now a link; a link is never written "
-			"through");
+		        "through");
 		goto done;
 	}
 	if (basic.FileAttributes & FILE_ATTRIBUTE_READONLY) {
@@ -1132,9 +1132,9 @@ static WfStatus wsl_save_over(const wchar_t *path,
 		        ERROR_FILE_EXISTS == error ||
 		                        ERROR_ALREADY_EXISTS == error
 		                ? "nine retained originals (<file>~ to "
-				  "<file>~9) "
+		                  "<file>~9) "
 		                  "exist: move or delete some before saving "
-				  "again"
+		                  "again"
 		                : "the backup cannot be created");
 		goto done;
 	}
@@ -1145,7 +1145,7 @@ static WfStatus wsl_save_over(const wchar_t *path,
 		(void)wf_wslrm_created_file(eback); /* made by this call */
 		s = sv(out, WF_SV_IO, error ? error : GetLastError(),
 		        "the backup could not be written; the file is "
-			"unchanged");
+		        "unchanged");
 		goto done;
 	}
 	CloseHandle(hb);
@@ -1367,12 +1367,12 @@ WfStatus wf_efile_save_over(const wchar_t *path,
 		s = ERROR_ALREADY_EXISTS == error
 		        ? sv(out, WF_SV_UNSAFE, error,
 		                  "nine retained originals (<file>~ to "
-				  "<file>~9) "
+		                  "<file>~9) "
 		                  "exist: move or delete some before saving "
-				  "again")
+		                  "again")
 		        : sv(out, WF_SV_IO, error,
 		                  "the retained original's name cannot be "
-				  "checked");
+		                  "checked");
 		goto done;
 	}
 	error = 0;

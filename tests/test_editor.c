@@ -1497,7 +1497,8 @@ static void a_new_file_gets_the_configured_line_break(void)
 
 	wf_ed_free(&ed);
 	CHECK(WF_OK == wf_ed_init(&ed, NULL)); /* Windows default */
-	CHECK(WF_OK == wf_ed_insert_text(&ed, "a", 1) && WF_OK == wf_ed_newline(&ed) &&
+	CHECK(WF_OK == wf_ed_insert_text(&ed, "a", 1) &&
+	        WF_OK == wf_ed_newline(&ed) &&
 	        WF_OK == wf_ed_insert_text(&ed, "b", 1));
 	CHECK(is("a\r\nb"));
 
@@ -1505,7 +1506,8 @@ static void a_new_file_gets_the_configured_line_break(void)
 	o.new_eol = WF_EOL_LF; /* WSL and SFTP places */
 	wf_ed_free(&ed);
 	CHECK(WF_OK == wf_ed_init(&ed, &o));
-	CHECK(WF_OK == wf_ed_insert_text(&ed, "a", 1) && WF_OK == wf_ed_newline(&ed) &&
+	CHECK(WF_OK == wf_ed_insert_text(&ed, "a", 1) &&
+	        WF_OK == wf_ed_newline(&ed) &&
 	        WF_OK == wf_ed_insert_text(&ed, "b", 1));
 	CHECK(is("a\nb"));
 

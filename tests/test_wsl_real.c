@@ -461,17 +461,20 @@ int main(void)
 		for (int attempt = 0; attempt < 20 && !ready; attempt++) {
 			WfWslReport w;
 
-			ready = WF_OK == wf_wslops_create(
-			                         root, L".warm", false, &w) &&
-			        WF_OK == wf_wslops_delete_in(
-			                         root, L".warm", false, &w);
+			ready = WF_OK ==
+			                wf_wslops_create(
+			                        root, L".warm", false, &w) &&
+			        WF_OK ==
+			                wf_wslops_delete_in(
+			                        root, L".warm", false, &w);
 			if (!ready) {
 				Sleep(500);
 			}
 		}
 		if (!ready) {
 			(void)wf_wslops_delete(root, true, &r);
-			printf("NOT RUN: the distribution did not take a write\n");
+			printf("NOT RUN: the distribution did not take a "
+			       "write\n");
 			return SKIP_EXIT;
 		}
 	}

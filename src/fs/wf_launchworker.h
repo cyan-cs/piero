@@ -20,7 +20,8 @@ typedef struct
 {
 	uint32_t gen;
 	WfLaunchOutcome outcome;
-	wchar_t name[256]; /* file leaf or terminal directory, truncated for display */
+	wchar_t name
+	        [256]; /* file leaf or terminal directory, truncated for display */
 } WfLaunchResult;
 
 WfStatus wf_launchworker_start(WfLaunchWorker **out);

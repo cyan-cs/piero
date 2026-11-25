@@ -132,13 +132,13 @@ static void a_draft_round_trips_and_is_replaced_and_removed(void)
 	free(text);
 
 	/* another file's draft is another draft */
-	CHECK(WF_E_NOENT == wf_draft_read(L"C:\\Users\\me\\other.txt", &back,
-	                            &text, &n));
+	CHECK(WF_E_NOENT ==
+	        wf_draft_read(L"C:\\Users\\me\\other.txt", &back, &text, &n));
 
 	/* a secret-looking file is refused at the door, whoever asks */
 	CHECK(WF_OK != wf_draft_write(L"C:\\Users\\me\\.env", enc, "k=v", 3));
-	CHECK(WF_E_NOENT == wf_draft_read(L"C:\\Users\\me\\.env", &back, &text,
-	                            &n));
+	CHECK(WF_E_NOENT ==
+	        wf_draft_read(L"C:\\Users\\me\\.env", &back, &text, &n));
 
 	wf_draft_remove(path);
 	CHECK(WF_E_NOENT == wf_draft_read(path, &back, &text, &n));
@@ -150,8 +150,8 @@ static void a_draft_round_trips_and_is_replaced_and_removed(void)
 	if (INVALID_HANDLE_VALUE != h) {
 		do {
 			if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-				swprintf(file, WF_ARRAY_LEN(file), L"%ls\\%ls", dir,
-				        fd.cFileName);
+				swprintf(file, WF_ARRAY_LEN(file), L"%ls\\%ls",
+				        dir, fd.cFileName);
 				DeleteFileW(file);
 			}
 		} while (FindNextFileW(h, &fd));

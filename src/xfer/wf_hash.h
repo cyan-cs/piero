@@ -18,10 +18,11 @@
  */
 typedef struct
 {
-	WfStatus st;    /* WF_OK; WF_E_CHANGED: not the same file by the end;
-	                   WF_E_CANCELLED; WF_E_ACCESS (a link, no right);
-	                   WF_E_NOENT; WF_E_INVAL (a folder); WF_E_OS */
-	uint32_t error; /* captured Win32 error when available; 0 for policy failures */
+	WfStatus st; /* WF_OK; WF_E_CHANGED: not the same file by the end;
+	                WF_E_CANCELLED; WF_E_ACCESS (a link, no right);
+	                WF_E_NOENT; WF_E_INVAL (a folder); WF_E_OS */
+	uint32_t
+	        error; /* captured Win32 error when available; 0 for policy failures */
 	uint8_t digest[32];  /* meaningful only with WF_OK */
 	uint64_t size;       /* the size the file had when it was opened */
 	uint64_t last_write; /* its last write time (FILETIME ticks) then */

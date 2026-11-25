@@ -765,7 +765,8 @@ static void a_folder_is_resolved_to_its_repository_by_the_worker(void)
 	{
 		LONG before = fake.calls;
 
-		CHECK(WF_OK == wf_gitworker_repo(w, 3, &e, deep, WF_GIT_REPO_LOCATE));
+		CHECK(WF_OK ==
+		        wf_gitworker_repo(w, 3, &e, deep, WF_GIT_REPO_LOCATE));
 		CHECK(wait_answer(w, &a, 5000));
 		CHECK(3 == a.gen && a.located && WF_GITR_OK == a.state);
 		CHECK(a.asked && !wcscmp(a.asked, deep));

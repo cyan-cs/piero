@@ -10,17 +10,15 @@
  * confirmation policy, not proof that the associated program is a viewer.
  * Extensions are stored in lower case and compared case-insensitively.
  */
-static const wchar_t *const QUIET[] = {
-        L"txt", L"md", L"markdown", L"log", L"csv", L"tsv", L"json", L"xml",
-        L"yaml", L"yml", L"ini", L"toml", L"cfg", L"conf", L"rtf", L"nfo",
-        L"pdf", L"docx", L"xlsx", L"pptx", L"odt", L"ods", L"odp", L"epub",
-        L"png", L"jpg", L"jpeg", L"gif", L"bmp", L"webp", L"ico", L"tif",
-        L"tiff", L"heic", L"avif",
-        L"mp3", L"wav", L"flac", L"ogg", L"m4a", L"aac", L"opus", L"mp4",
-        L"mkv", L"avi", L"mov", L"webm", L"wmv",
-        L"zip", L"7z", L"rar", L"gz", L"tgz", L"bz2", L"xz",
-        L"c", L"h", L"cpp", L"hpp", L"cc", L"cxx", L"hxx", L"rs", L"go", L"cs",
-        L"java", L"kt", L"swift", L"sql", L"css", L"tex", L"bib"};
+static const wchar_t *const QUIET[] = {L"txt", L"md", L"markdown", L"log",
+        L"csv", L"tsv", L"json", L"xml", L"yaml", L"yml", L"ini", L"toml",
+        L"cfg", L"conf", L"rtf", L"nfo", L"pdf", L"docx", L"xlsx", L"pptx",
+        L"odt", L"ods", L"odp", L"epub", L"png", L"jpg", L"jpeg", L"gif",
+        L"bmp", L"webp", L"ico", L"tif", L"tiff", L"heic", L"avif", L"mp3",
+        L"wav", L"flac", L"ogg", L"m4a", L"aac", L"opus", L"mp4", L"mkv",
+        L"avi", L"mov", L"webm", L"wmv", L"zip", L"7z", L"rar", L"gz", L"tgz",
+        L"bz2", L"xz", L"c", L"h", L"cpp", L"hpp", L"cc", L"cxx", L"hxx", L"rs",
+        L"go", L"cs", L"java", L"kt", L"swift", L"sql", L"css", L"tex", L"bib"};
 
 static wchar_t fold(wchar_t c)
 {

@@ -44,7 +44,8 @@ typedef bool (*WfBlockingTick)(void *ctx, unsigned elapsed_ms);
 
 typedef struct
 {
-	unsigned first_ms;   /* ticks begin once this elapsed threshold is reached */
+	unsigned
+	        first_ms; /* ticks begin once this elapsed threshold is reached */
 	unsigned every_ms;   /* polling interval; 0 selects 50 ms */
 	WfBlockingTick tick; /* NULL: just run it, on this thread, no tick */
 	void *ctx;

@@ -672,7 +672,8 @@ static void every_item_a_job_made_is_registered_once(void)
  * ("a (2).txt"), for files and folders, and touches nothing that was there. */
 static void keep_both_gives_the_new_ones_the_next_free_name(void)
 {
-	wchar_t a[1100], b[1100], c[1100], dir_a[1100], dir_b[1100], inner[1100];
+	wchar_t a[1100], b[1100], c[1100], dir_a[1100], dir_b[1100],
+	        inner[1100];
 	const wchar_t *names[] = {L"f.txt", L"folder", L".hidden", L"noext"};
 	WfCopySpec spec;
 	WfCopyResult r;

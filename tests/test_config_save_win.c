@@ -309,8 +309,9 @@ int main(void)
 	an_unverified_commit_requires_reopening();
 	size_t i;
 	static const wchar_t *const leftovers[] = {L"fresh\\config.ini",
-	        L"fresh\\config.ini~", L"fresh\\config.ini~2", L"keep.ini~", L"bom.ini~", L"keep.ini",
-	        L"bom.ini", L"race.ini", L"readonly.ini", L"bad.ini"};
+	        L"fresh\\config.ini~", L"fresh\\config.ini~2", L"keep.ini~",
+	        L"bom.ini~", L"keep.ini", L"bom.ini", L"race.ini",
+	        L"readonly.ini", L"bad.ini"};
 
 	if (!p0_lab_open(&lab, "configsave", 0) || !lab.area) {
 		return TEST_RESULT();

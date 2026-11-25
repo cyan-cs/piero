@@ -366,7 +366,8 @@ static void realpath_requires_the_complete_name_record(void)
 			CHECK(WF_OK == wf_sftp_name_first(&m, &name, &n));
 			CHECK(9 == n && !memcmp(name, "/home/box", 9));
 		} else {
-			CHECK(WF_E_CORRUPT == wf_sftp_name_first(&m, &name, &n));
+			CHECK(WF_E_CORRUPT ==
+			        wf_sftp_name_first(&m, &name, &n));
 			CHECK(!name && !n);
 		}
 	}

@@ -108,7 +108,7 @@ int wf_main_recovery_command(const WfCli *cli)
 		            &error) != WF_OK) {
 			fprintf(stderr,
 			        "piero: older recovery metadata unavailable "
-				"(Win32 "
+			        "(Win32 "
 			        "%lu); target volume was not accessed\n",
 			        error);
 			goto done;
