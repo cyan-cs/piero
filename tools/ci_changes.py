@@ -63,11 +63,13 @@ def format_paths(base, head):
 
 
 def whitespace(base, head):
+    # Preserve upstream formatting, as in the C/header formatting check.
+    paths = ('.', ':(top,exclude)src/third_party/**')
     result = git('-c', 'core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol',
-                 'diff', '--no-ext-diff', '--no-textconv', '--check', base, head, '--', check=False)
+                 'diff', '--no-ext-diff', '--no-textconv', '--check', base, head, '--', *paths, check=False)
     if result.returncode:
         raise RuntimeError('Committed whitespace check failed; source lines withheld. Run git diff --check locally for details.')
-    count = len(git('diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', base, head, '--').stdout.split(b'\0')) - 1
+    count = len(git('diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', base, head, '--', *paths).stdout.split(b'\0')) - 1
     print(f'Committed whitespace: PASS ({count} changed paths inspected)')
 
 

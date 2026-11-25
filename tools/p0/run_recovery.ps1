@@ -71,5 +71,3 @@ foreach ($id in $ids) {
 }
 "run_id=$RunId; S12/S13 exit=$suiteExit; S11 iterations=$LiveIterations; overall=$(if($overallFailure){'FAIL'}else{'MEASURED_PASS_S15_GATE_BLOCKED'})"
 if ($overallFailure) { exit 1 }
-
-

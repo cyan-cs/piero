@@ -89,6 +89,18 @@ class RepositoryTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             ci_changes.whitespace(*self.full())
 
+    def test_whitespace_excludes_vendor_but_checks_project_files(self):
+        vendor = {'src/third_party/vendor.c': 'upstream \n\n',
+                  'src/third_party/nested/data.uu': 'encoded \n'}
+        first = self.commit({**vendor, 'src/a.c': 'int a;\n'})
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            ci_changes.whitespace(*self.full())
+        self.assertIn('1 changed paths inspected', stream.getvalue())
+        self.commit({**vendor, 'src/a.c': 'int a; \n'}, first)
+        with self.assertRaisesRegex(RuntimeError, 'whitespace'):
+            ci_changes.whitespace(*self.full(payload={'before': first}))
+
     def test_push_selects_changed_and_renamed_but_not_deleted_files(self):
         first = self.commit({'src/old.c': 'int a;\n', 'src/same.c': 'int b;\n', 'tests/gone.h': 'int c;\n'})
         self.commit({'src/new name.c': 'int a;\n', 'src/same.c': 'int b;\n'}, first)
