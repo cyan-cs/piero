@@ -127,6 +127,30 @@ static bool img_alive(Gate *g)
 	return WAIT_TIMEOUT == WaitForSingleObject(g->pr.p.pi.hProcess, 0);
 }
 
+/* Resize invalidates the rendered image. Wait for the final frame's complete
+ * predicate, including pixels: dimensions alone can arrive before decoding.
+ * The black 16K fixture is drawn as blanks; only the gradient has visible cells. */
+static bool img_wait_resized(Gate *g, unsigned w, unsigned h, bool black)
+{
+	ULONGLONG end = GetTickCount64() + 30000;
+
+	do {
+		pty_snapshot(&g->pr.p, g->pr.screen, sizeof g->pr.screen);
+		if (!img_alive(g)) {
+			return false;
+		}
+		if (img_screen_has(g->pr.screen, w, h) &&
+		        strstr(g->pr.screen, "NORMAL") &&
+		        (black ||
+		                count_text(g->pr.screen, "\xE2\x96\x80") > 20 ||
+		                count_text(g->pr.screen, "=") > 10)) {
+			return true;
+		}
+		Sleep(50);
+	} while (GetTickCount64() < end);
+	return false;
+}
+
 /* The picture of file k is shown and no other of the 300 is (a picture that comes
  * late for a file already passed would show its own size here). */
 static bool img_only(Gate *g, unsigned k)
@@ -431,40 +455,33 @@ static bool images_case(Ev *e)
 			img_move(g, (int)stay[round] - (int)cur);
 			cur = stay[round];
 			if (IMG_N + 1 == cur) {
-				ok = img_wait_dims(g, 15360, 8640, 30000, NULL);
+				w = 15360;
+				h = 8640;
 			} else {
 				img_dims(cur, &w, &h);
-				ok = img_wait_dims(g, w, h, 30000, NULL);
 			}
+			ok = img_wait_dims(g, w, h, 30000, NULL);
 			for (int i = 0; ok && i < 40; i++) {
 				pty_resize(&g->pr.p, sizes[i % 10][0],
 				        sizes[i % 10][1]);
 				Sleep(30 + (DWORD)(i % 3) * 40);
 			}
 			pty_resize(&g->pr.p, 120, 30);
-			Sleep(1500);
-			pty_snapshot(
-			        &g->pr.p, g->pr.screen, sizeof g->pr.screen);
-			if (IMG_N + 1 == cur) {
-				all = ok &&
-				        img_screen_has(
-				                g->pr.screen, 15360, 8640);
-			} else {
-				img_dims(cur, &w, &h);
-				all = ok && img_screen_has(g->pr.screen, w, h);
-			}
-			all = all && img_alive(g) &&
-			        /* the 16K picture is black: drawn as blanks, so only the
-				 * gradient one is counted in cells */
-			        (IMG_N + 1 == cur ||
-			                count_text(g->pr.screen,
-			                        "\xE2\x96\x80") > 20 ||
-			                count_text(g->pr.screen, "=") >
-			                        10) && /* ascii style */
-			        NULL != strstr(g->pr.screen, "NORMAL");
+			all = ok && img_wait_resized(g, w, h, IMG_N + 1 == cur);
 			if (!all) {
 				char why[48];
 
+				printf("images resize: round=%d initial=%d "
+				       "alive=%d "
+				       "dimensions=%d normal=%d blocks=%zu "
+				       "ascii=%zu\n",
+				        round, ok, img_alive(g),
+				        img_screen_has(g->pr.screen, w, h),
+				        NULL != strstr(g->pr.screen, "NORMAL"),
+				        count_text(
+				                g->pr.screen, "\xE2\x96\x80"),
+				        count_text(g->pr.screen, "="));
+				fflush(stdout);
 				snprintf(why, sizeof why,
 				        "images_resize_round_%d", round);
 				product_snapshot(&g->pr, why);

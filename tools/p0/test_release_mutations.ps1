@@ -273,7 +273,9 @@ bool wf_state_report_any'},
  # is a cut, the application refuses what it must, and a capture ends in the paste that was asked.
  @{name='clipboard_unterminated_list_accepted';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='if (at + len >= units) {';new='if (0) {'},
  @{name='clipboard_relative_path_accepted';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='if (!wf_session_path_ok(copy)) { /* absolute, no . or .. component */';new='if (0) { /* absolute, no . or .. component */'},
- @{name='clipboard_thousand_and_one_accepted';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='if (out->n >= WF_CLIPFILES_MAX) {';new='if (0) {'},
+ # Accept an over-limit block by silently dropping the extra path. Removing
+ # the guard instead writes past the array before the assertion under ASan.
+ @{name='clipboard_thousand_and_one_accepted';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='if (out->n >= WF_CLIPFILES_MAX) { return WF_CLIP_TOO_MANY; }';new='if (out->n >= WF_CLIPFILES_MAX) { return WF_CLIP_OK; }'},
  @{name='clipboard_copy_and_move_is_a_cut';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='return (effect & 2u) && !(effect & 1u); /* DROPEFFECT_MOVE, _COPY */';new='return (effect & 2u); /* DROPEFFECT_MOVE, _COPY */'},
  @{name='clipboard_lone_surrogate_accepted';file='src/clipboard/wf_clipboard.c';test='tests/test_clipboard.c';old='if (n > WF_CLIPFILES_PATH || !utf16_ok(s, n)) {';new='if (n > WF_CLIPFILES_PATH) {'},
  @{name='clipboard_cut_is_pasted';file='src/ui/wf_app_clip.c';test='tests/test_clip_ui.c';old='if (wf_clip_effect_is_cut(files->effect)) {';new='if (0) {'},

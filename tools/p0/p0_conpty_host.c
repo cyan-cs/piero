@@ -2044,12 +2044,16 @@ static bool midtransfer_run(Product *pr)
 
 	/* pause while bytes are still being written */
 	ok = start_paste(pr, dest, &s_started);
+	/* Saving a snapshot can take longer than the rest of a cached copy.
+	 * Send the pause as soon as progress is observed, before evidence I/O. */
+	if (ok) {
+		pty_send(&pr->p, "z", 1);
+	}
 	pty_snapshot(&pr->p, pr->screen, sizeof pr->screen);
 	product_snapshot(pr, "midtransfer_first_copy");
 	ev_check(pr->e, "midtransfer_copy_running", 0,
 	        "temporary file passes 2 MiB", ok ? "observed" : "missing", ok);
 	PRODUCT_REQUIRE(ok);
-	pty_send(&pr->p, "z", 1);
 	/* the notice "Paused: ..." covers the status line; Esc clears it, and the
 	 * upper-case PAUSED status is shown only once the worker is parked */
 	PRODUCT_STEP("\x1b", "NORMAL", "midtransfer_notice_cleared");
@@ -2061,6 +2065,9 @@ static bool midtransfer_run(Product *pr)
 	PRODUCT_REQUIRE(ok);
 	s_paused = copy_temp_size(dest);
 	ok = s_paused >= s_started && s_paused < ((long long)MIB << 20);
+	printf("midtransfer bytes: started=%lld paused=%lld total=%lld\n",
+	        s_started, s_paused, (long long)MIB << 20);
+	fflush(stdout);
 	ev_check(pr->e, "midtransfer_paused_before_the_end", 0,
 	        "temporary file is partial", ok ? "partial" : "complete", ok);
 	Sleep(300); /* the window in which a confirmed pause must change nothing */
@@ -2104,12 +2111,14 @@ static bool midtransfer_run(Product *pr)
 		return false;
 	}
 	ok = start_paste(pr, dest2, &s_started);
+	if (ok) {
+		pty_send(&pr->p, "z", 1);
+	}
 	pty_snapshot(&pr->p, pr->screen, sizeof pr->screen);
 	product_snapshot(pr, "midtransfer_second_copy");
 	ev_check(pr->e, "midtransfer_second_copy_running", 0,
 	        "temporary file passes 2 MiB", ok ? "observed" : "missing", ok);
 	PRODUCT_REQUIRE(ok);
-	pty_send(&pr->p, "z", 1);
 	PRODUCT_STEP("\x1b", "NORMAL", "midtransfer_second_notice_cleared");
 	ok = screen_shows(
 	        &pr->p, "| PAUSED ", pr->screen, sizeof pr->screen, 10000);

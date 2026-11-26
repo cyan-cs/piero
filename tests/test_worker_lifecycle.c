@@ -769,6 +769,7 @@ static void a_worker_holding_an_answer_is_not_idle(const Kind *k)
 {
 	void *w = k->start();
 	bool idle_at_last = false;
+	bool completed = false;
 
 	CHECK(NULL != w);
 	if (!w) {
@@ -776,6 +777,22 @@ static void a_worker_holding_an_answer_is_not_idle(const Kind *k)
 	}
 	CHECK(k->post(w, 1));
 	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(k->event(w), 5000));
+	/* Ready can be signalled before the worker clears busy. Wait for the
+	 * completed request under the shared core lock, without polling away its
+	 * answer. Otherwise busy alone can hide a broken unread-answer check.
+	 * Every worker embeds WfWorkCore as its first field. */
+	for (ULONGLONG end = GetTickCount64() + 5000;
+	        !completed && GetTickCount64() < end;) {
+		WfWorkCore *core = w;
+
+		AcquireSRWLockShared(&core->lock);
+		completed = core->stats.completed_requests == 1 && !core->busy;
+		ReleaseSRWLockShared(&core->lock);
+		if (!completed) {
+			Sleep(1);
+		}
+	}
+	CHECK(completed);
 	if (!strcmp(k->name, "picture")) {
 		WfImageWorkerStats stats = wf_imageworker_stats(w);
 
