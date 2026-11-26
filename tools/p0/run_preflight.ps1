@@ -10,7 +10,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (!$RunId) { $RunId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '-s08s10-' + $Toolchain + '-' + [guid]::NewGuid().ToString('N').Substring(0,8) }
 if ($RunId -notmatch '^[A-Za-z0-9_-]+$') { throw 'Unsafe run ID' }
 $config = if ($Toolchain -eq 'clang') { 'Debug' } else { 'Release' }
-$compiler = (Get-Command $(if($Toolchain -eq 'clang'){'clang-cl'}else{'cl'})).Source
+$compiler = (Get-Command $(if($Toolchain -eq 'clang'){'clang-cl'}else{'cl'}) | Select-Object -First 1).Source
 $ninja = Join-Path $env:VSINSTALLDIR 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe'
 if (!(Test-Path -LiteralPath $ninja)) { throw 'VS Ninja is required in this restricted runner' }
 $build = Join-Path $repo ('out/preflight-final-' + $Toolchain + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))

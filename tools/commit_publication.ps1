@@ -4,7 +4,8 @@ param([string]$Manifest = 'out/publication-audit/final-handoff/manifest.json', [
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
-$gitExe = (Get-Command git.exe -CommandType Application -ErrorAction Stop).Source
+. (Join-Path $PSScriptRoot 'wf_git.ps1')
+$gitExe = Get-WfGitExecutable
 $plan = Get-Content -Raw -Encoding UTF8 -LiteralPath $Manifest | ConvertFrom-Json
 $head = & $gitExe rev-parse HEAD
 if ($LASTEXITCODE) { throw 'Cannot read HEAD' }

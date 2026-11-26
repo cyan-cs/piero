@@ -99,6 +99,34 @@ static WfLaunchResult launch(const wchar_t *path,
 }
 
 /* Waits for the started program to leave its note, then reads it. */
+static bool helper_has_exited(const wchar_t *text)
+{
+	const wchar_t *receipt = wcsstr(text, L"\npid=");
+	unsigned long pid;
+	unsigned long long start;
+	FILETIME c, e, k, u;
+	HANDLE process;
+	bool ok;
+
+	if (!receipt ||
+	        2 !=
+	                swscanf_s(receipt + 1, L"pid=%lu start=%llu", &pid,
+	                        &start)) {
+		return false;
+	}
+	process = OpenProcess(
+	        SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+	if (!process) {
+		return ERROR_INVALID_PARAMETER == GetLastError();
+	}
+	ok = GetProcessTimes(process, &c, &e, &k, &u) &&
+	        ((((unsigned long long)c.dwHighDateTime << 32) |
+	                 c.dwLowDateTime) != start ||
+	                WAIT_OBJECT_0 == WaitForSingleObject(process, 10000));
+	CloseHandle(process);
+	return ok;
+}
+
 static bool read_seen(Env *v, const wchar_t *path, wchar_t *out, size_t cap)
 {
 	wchar_t seen[1200], rel[300];
@@ -133,6 +161,9 @@ static bool read_seen(Env *v, const wchar_t *path, wchar_t *out, size_t cap)
 	out[got / sizeof *out] = 0;
 	swprintf(rel, 300, L"w\\%ls.seen", leaf);
 	CHECK(p0_area_track(v->lab.area, rel, 0));
+	/* The receipt is written before process exit. Wait on this helper's
+	 * identity before removing a directory it may still have as its cwd. */
+	CHECK(helper_has_exited(out));
 	return got > 0;
 }
 

@@ -1681,7 +1681,7 @@ static void every_word_of_the_screen_is_in_both_languages(void)
 	static const WfBatchWhy WHY[] = {WF_BP_UNCHANGED, WF_BP_PATH_LONG,
 	        WF_BP_DUP_TARGET, WF_BP_EXISTS, WF_BP_DUP_ITEM, WF_BP_NESTED,
 	        WF_BP_VOLUME, WF_BP_NO_ID, WF_BP_LINK_PARENT, WF_BP_LINK_ITEM};
-	WfBatchRow row[1];
+	WfBatchRow row[1] = {0};
 	WfBatchPlan pl;
 	char buf[160];
 

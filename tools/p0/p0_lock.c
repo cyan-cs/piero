@@ -369,6 +369,10 @@ done:
 static int scn_lock(Ev *e)
 {
 	bool good = true;
+	int prerequisite = require_restart_manager(e);
+	if (prerequisite) {
+		return prerequisite;
+	}
 
 	if (!g_lock_helper[0] ||
 	        INVALID_FILE_ATTRIBUTES == GetFileAttributesW(g_lock_helper)) {

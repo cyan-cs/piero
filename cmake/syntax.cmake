@@ -168,15 +168,3 @@ if(BUILD_TESTING)
   add_test(NAME syntax_worker COMMAND test_syntax_worker)
   set_tests_properties(syntax_worker PROPERTIES LABELS non-destructive TIMEOUT 180)
 endif()
-
-if(WF_SANITIZE)
-  # Under ASan the same string literal is registered twice from piero-syntax.dll
-  # (the host and DLL compile some of the same source files), which the
-  # ODR check reports as a violation. Nothing is defined twice; the check is off
-  # for the tests that load the DLL.
-  foreach(t syntax_host syntax_loader syntax_worker syntax_ui syntax_e2e)
-    if(TEST ${t})
-      set_property(TEST ${t} APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=detect_odr_violation=0")
-    endif()
-  endforeach()
-endif()

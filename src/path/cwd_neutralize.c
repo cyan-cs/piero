@@ -19,17 +19,28 @@ static bool private_acl(HANDLE h, PSID user)
 	SECURITY_DESCRIPTOR_CONTROL control;
 	DWORD revision;
 	ACCESS_ALLOWED_ACE *ace = NULL;
+	DWORD error = WF_PRIVATE_E_NOT_PRIVATE, query;
 	bool ok = false;
-	if (GetSecurityInfo(h, SE_FILE_OBJECT,
-	            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-	            &owner, NULL, &dacl, NULL, &sd) != ERROR_SUCCESS) {
+	query = GetSecurityInfo(h, SE_FILE_OBJECT,
+	        OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, &owner,
+	        NULL, &dacl, NULL, &sd);
+	if (ERROR_SUCCESS != query) {
+		error = query;
+		goto done;
+	}
+	if (!GetSecurityDescriptorControl(sd, &control, &revision)) {
+		error = GetLastError();
 		goto done;
 	}
 	if (!owner || !EqualSid(owner, user) || !dacl || 1 != dacl->AceCount ||
-	        !GetSecurityDescriptorControl(sd, &control, &revision) ||
-	        !(control & SE_DACL_PROTECTED) ||
-	        !GetAce(dacl, 0, (void **)&ace) ||
-	        ACCESS_ALLOWED_ACE_TYPE != ace->Header.AceType ||
+	        !(control & SE_DACL_PROTECTED)) {
+		goto done;
+	}
+	if (!GetAce(dacl, 0, (void **)&ace)) {
+		error = GetLastError();
+		goto done;
+	}
+	if (ACCESS_ALLOWED_ACE_TYPE != ace->Header.AceType ||
 	        !EqualSid(&ace->SidStart, user) ||
 	        FILE_ALL_ACCESS != (ace->Mask & FILE_ALL_ACCESS)) {
 		goto done;
@@ -38,6 +49,9 @@ static bool private_acl(HANDLE h, PSID user)
 done:
 	if (sd) {
 		LocalFree(sd);
+	}
+	if (!ok) {
+		SetLastError(error);
 	}
 	return ok;
 }
@@ -76,7 +90,7 @@ bool wf_private_directory_open(
 	HANDLE token = NULL, h = INVALID_HANDLE_VALUE;
 	TOKEN_USER *user = NULL;
 	DWORD bytes = 0;
-	wchar_t *sid = NULL, *extended = NULL, sddl[256];
+	wchar_t *sid = NULL, *extended = NULL, sddl[512];
 	PSECURITY_DESCRIPTOR sd = NULL;
 	SECURITY_ATTRIBUTES security = {sizeof security, NULL, FALSE};
 	FILE_ATTRIBUTE_TAG_INFO attributes;
@@ -91,15 +105,28 @@ bool wf_private_directory_open(
 		goto os_error;
 	}
 	GetTokenInformation(token, TokenUser, NULL, 0, &bytes);
-	if (!bytes || NULL == (user = malloc(bytes))) {
+	if (!bytes) {
+		goto os_error;
+	}
+	if (NULL == (user = malloc(bytes))) {
 		*error = ERROR_NOT_ENOUGH_MEMORY;
 		goto done;
 	}
-	if (!GetTokenInformation(token, TokenUser, user, bytes, &bytes) ||
-	        !ConvertSidToStringSidW(user->User.Sid, &sid)) {
+	if (!GetTokenInformation(token, TokenUser, user, bytes, &bytes)) {
 		goto os_error;
 	}
-	if (swprintf(sddl, 256, L"D:P(A;;FA;;;%ls)", sid) < 0) {
+	if (!IsValidSid(user->User.Sid)) {
+		*error = ERROR_INVALID_SID;
+		goto done;
+	}
+	if (!ConvertSidToStringSidW(user->User.Sid, &sid)) {
+		goto os_error;
+	}
+	/* TokenOwner can be an administrators group. New state belongs to the
+	 * actual user; existing objects are only inspected, never repaired. */
+	if (swprintf(sddl, sizeof sddl / sizeof *sddl, L"O:%lsD:P(A;;FA;;;%ls)",
+	            sid, sid) < 0) {
+		*error = ERROR_INSUFFICIENT_BUFFER;
 		goto done;
 	}
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -135,7 +162,7 @@ bool wf_private_directory_open(
 		goto done;
 	}
 	if (!private_acl(h, user->User.Sid)) {
-		*error = WF_PRIVATE_E_NOT_PRIVATE;
+		*error = GetLastError();
 		goto done;
 	}
 	if (!wf_canonical_from_handle(h, &canonical, error)) {

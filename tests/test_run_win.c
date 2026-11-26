@@ -7,6 +7,37 @@
 #include "wf_test.h"
 
 static bool refuse_termination, fail_wait;
+static unsigned delayed_accounting, completion_waits;
+static BOOL query_job(HANDLE job,
+        JOBOBJECTINFOCLASS kind,
+        LPVOID info,
+        DWORD size,
+        LPDWORD returned)
+{
+	BOOL ok = QueryInformationJobObject(job, kind, info, size, returned);
+	if (ok && JobObjectBasicAccountingInformation == kind &&
+	        delayed_accounting) {
+		((JOBOBJECT_BASIC_ACCOUNTING_INFORMATION *)info)
+		        ->ActiveProcesses = 1;
+		delayed_accounting--;
+	}
+	return ok;
+}
+static BOOL wait_completion(HANDLE port,
+        LPDWORD message,
+        PULONG_PTR key,
+        LPOVERLAPPED *overlapped,
+        DWORD timeout)
+{
+	if (completion_waits) {
+		CHECK(timeout > 0 && timeout <= 100);
+		completion_waits--;
+		SetLastError(WAIT_TIMEOUT); /* missed notification */
+		return FALSE;
+	}
+	return GetQueuedCompletionStatus(
+	        port, message, key, overlapped, timeout);
+}
 static BOOL terminate_job(HANDLE job, UINT code)
 {
 	if (refuse_termination) {
@@ -27,7 +58,11 @@ static DWORD wait_process(HANDLE process, DWORD timeout)
 }
 #define TerminateJobObject terminate_job
 #define WaitForSingleObject wait_process
+#define QueryInformationJobObject query_job
+#define GetQueuedCompletionStatus wait_completion
 #include "../tools/p0/wf_run_win.c"
+#undef GetQueuedCompletionStatus
+#undef QueryInformationJobObject
 #undef WaitForSingleObject
 #undef TerminateJobObject
 
@@ -56,6 +91,9 @@ int main(int argc, char **argv)
 {
 	CHECK(GetModuleFileNameW(NULL, self, 1024) > 0);
 	if (2 == argc) {
+		if (!strcmp(argv[1], "no-console")) {
+			return GetConsoleCP() ? 1 : 0;
+		}
 		if (!strcmp(argv[1], "hang")) {
 			Sleep(INFINITE);
 			return 2;
@@ -88,11 +126,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	DWORD before, after;
+	/* Root/process signaling and job accounting need not become visible
+	 * together. Spurious or missed notifications never prove completion. */
+	HANDLE empty_job = CreateJobObjectW(NULL, NULL);
+	CHECK(empty_job);
+	delayed_accounting = completion_waits = 2;
+	CHECK(job_empty(empty_job, NULL, GetTickCount64() + 1000));
+	CHECK(!delayed_accounting && !completion_waits);
+	CHECK(CloseHandle(empty_job));
 	/* Warm every loader path, including a failed CreateProcess, before the
 	 * handle-retention check. Windows lazily opens process-wide handles. */
 	for (unsigned round = 0; round < 2; round++) {
 		CHECK(GetProcessHandleCount(GetCurrentProcess(), &before));
 		WfRunResult r = run(L"ok", 5000, false);
+		CHECK(WF_RUN_EXITED == r.state && 0 == r.exit_code);
+		r = run(L"no-console", 5000, false);
 		CHECK(WF_RUN_EXITED == r.state && 0 == r.exit_code);
 		r = run(L"fail", 5000, false);
 		CHECK(WF_RUN_EXITED == r.state && 1 == r.exit_code);

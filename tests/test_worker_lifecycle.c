@@ -776,6 +776,11 @@ static void a_worker_holding_an_answer_is_not_idle(const Kind *k)
 	}
 	CHECK(k->post(w, 1));
 	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(k->event(w), 5000));
+	if (!strcmp(k->name, "picture")) {
+		WfImageWorkerStats stats = wf_imageworker_stats(w);
+
+		CHECK(stats.worker.completed_requests == 1);
+	}
 	CHECK(!k->idle(w)); /* the answer waits, whatever the thread is doing */
 	k->drain(w);
 	for (int t = 0; t < 600 && !idle_at_last; t++) {

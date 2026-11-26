@@ -13,7 +13,7 @@ $source = (Resolve-Path -LiteralPath $SourceRoot).Path
 $build = (Resolve-Path -LiteralPath $BuildRoot).Path
 $output = Join-Path $repo "out/review-bench-$Tag"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
+$compiler = (Get-Command clang-cl.exe -ErrorAction Stop | Select-Object -First 1).Source
 $linker = Join-Path (Split-Path -Parent $compiler) 'lld-link.exe'
 $units = @((Join-Path $PSScriptRoot 'bench_review.c'),
     (Join-Path $source 'src/xfer/wf_probe_win.c'),

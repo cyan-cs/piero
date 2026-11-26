@@ -512,6 +512,11 @@ static void worker(void)
 int wmain(int argc, wchar_t **argv)
 {
 	static wchar_t beside[MAX_PATH];
+	if (2 == argc && !wcscmp(argv[1], L"--policy")) {
+		classes();
+		policy();
+		return TEST_RESULT();
+	}
 
 	if (argc >= 2) {
 		g_helper = argv[1];
@@ -529,6 +534,31 @@ int wmain(int argc, wchar_t **argv)
 	}
 	classes();
 	policy();
+	{
+		Helper probe;
+		WfLockHolder holder = {0};
+
+		CHECK(helper_start(&probe, L"hold"));
+		holder.pid = probe.pid;
+		holder.start = probe.start;
+		wf_proc_describe(&holder, NULL);
+		printf("lock prerequisite: session=%lu identity=%d close=%d "
+		       "end=%d\n",
+		        (unsigned long)holder.session, holder.identity_ok,
+		        holder.close_deny, holder.end_deny);
+		helper_stop(&probe);
+		if (WF_DENY_UNKNOWN == holder.end_deny ||
+		        (WF_DENY_SYSTEM == holder.end_deny &&
+		                !holder.session)) {
+			puts("BLOCKED: process facts/interactive session are "
+			     "unavailable; "
+			     "lock_policy remains a separate required test");
+			if (g_job) {
+				CloseHandle(g_job);
+			}
+			return wf_test_failures ? 1 : 77;
+		}
+	}
 	finds_the_helper();
 	answer_changes_when_the_holder_ends();
 	odd_requests_are_handled();
@@ -536,5 +566,8 @@ int wmain(int argc, wchar_t **argv)
 	closing();
 	ending();
 	worker();
+	if (g_job) {
+		CloseHandle(g_job);
+	}
 	return TEST_RESULT();
 }

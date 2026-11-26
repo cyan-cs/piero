@@ -9,9 +9,9 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (!$RunId) { $RunId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '-storage-' + $Toolchain + '-' + [guid]::NewGuid().ToString('N').Substring(0,8) }
 if ($RunId -notmatch '^[A-Za-z0-9_-]+$') { throw 'Unsafe run ID' }
 $config = if ($Toolchain -eq 'clang') { 'Debug' } else { 'Release' }
-$compiler = (Get-Command $(if($Toolchain -eq 'clang'){'clang-cl'}else{'cl'})).Source
+$compiler = (Get-Command $(if($Toolchain -eq 'clang'){'clang-cl'}else{'cl'}) | Select-Object -First 1).Source
 $ninja = Join-Path $env:VSINSTALLDIR 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe'
-if (!(Test-Path -LiteralPath $ninja)) { $ninja = (Get-Command ninja).Source }
+if (!(Test-Path -LiteralPath $ninja)) { $ninja = (Get-Command ninja | Select-Object -First 1).Source }
 $build = Join-Path $repo ('out/final-' + $Toolchain + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $dirs = @('P0-S04','P0-S05','P0-S06') | ForEach-Object { Join-Path $repo "p0-results/$_/$RunId" }
 foreach ($dir in $dirs) {

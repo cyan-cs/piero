@@ -17,6 +17,7 @@ CMakeLists.txt text eol=lf
 
 # Documentation and configuration.
 *.md text eol=lf
+/LICENSE text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

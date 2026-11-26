@@ -732,8 +732,21 @@ static size_t children_named(const wchar_t *name)
 	pe.dwSize = sizeof pe;
 	for (BOOL ok = Process32FirstW(snap, &pe); ok;
 	        ok = Process32NextW(snap, &pe)) {
-		n += pe.th32ParentProcessID == GetCurrentProcessId() &&
-		        !_wcsicmp(pe.szExeFile, name);
+		if (pe.th32ParentProcessID == GetCurrentProcessId() &&
+		        !_wcsicmp(pe.szExeFile, name)) {
+			HANDLE child = OpenProcess(
+			        SYNCHRONIZE, FALSE, pe.th32ProcessID);
+
+			/* A terminated process can remain in a process snapshot.
+			 * Count live/unknown children, not exited kernel objects. */
+			if (child) {
+				n += WAIT_OBJECT_0 !=
+				        WaitForSingleObject(child, 0);
+				CloseHandle(child);
+			} else {
+				n += ERROR_INVALID_PARAMETER != GetLastError();
+			}
+		}
 	}
 	CloseHandle(snap);
 	return n;

@@ -53,6 +53,23 @@ $result=Test-WfMutant 'fixture' $Directory 1
 """)
             self.assertNotEqual(result['result'], 'KILLED')
 
+    def test_only_a_completed_prerequisite_skip_is_skipped(self):
+        results = self.run_script("""
+$receipts=@(
+  @{state=0;error=0;exit_code=0},
+  @{state=0;error=0;exit_code=77},
+  @{state=0;error=0;exit_code=1},
+  @{state=3;error=1460;exit_code=77},
+  @{state=4;error=1460;exit_code=0},
+  @{state=0;error=5;exit_code=77}
+)
+$results=@($receipts | ForEach-Object { Get-WfControlVerdict ([pscustomobject]$_) })
+try { Get-WfControlVerdict ([pscustomobject]@{state=0}) | Out-Null; throw 'accepted missing fields' }
+catch { if($_.Exception.Message -notlike 'Incomplete control*'){throw} }
+'RESULT_JSON:'+ (ConvertTo-Json -Compress -InputObject $results)
+""")
+        self.assertEqual(results, ['PASS', 'SKIP', 'FAIL', 'FAIL', 'FAIL', 'FAIL'])
+
     def test_empty_group_does_not_pass(self):
         result = self.run_script("""
 try { $code=Complete-WfMutations @() $Directory $null; $passed=$code -eq 0 }

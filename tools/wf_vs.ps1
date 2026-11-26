@@ -34,7 +34,7 @@ function Find-WfVisualStudio {
 function Find-WfNinja([string]$VsRoot) {
   $bundled = Join-Path $VsRoot 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe'
   if (Test-Path -LiteralPath $bundled) { return $bundled }
-  $onPath = Get-Command ninja -ErrorAction SilentlyContinue
+  $onPath = Get-Command ninja -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($onPath) { return $onPath.Source }
   throw 'ninja was not found (put it on PATH or install the Visual Studio CMake tools).'
 }

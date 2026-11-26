@@ -6,6 +6,10 @@
 #include "../async/wf_worker.h"
 #include "wf_batchport.h"
 
+/* Optional test barrier after a verified rename, outside the worker lock.
+ * Install before start and clear after stop; production leaves it NULL. */
+extern void (*wf_batchworker_test_step)(size_t step);
+
 /*
  * Runs a prepared batch rename (wf_batch_execute), or the recovery of old
  * journals (wf_batch_recover), on a thread of its own (DR-DRAFT-022, UI).

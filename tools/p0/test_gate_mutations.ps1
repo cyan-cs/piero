@@ -1,7 +1,7 @@
 param([Parameter(Mandatory)][string]$Compiler,[Parameter(Mandatory)][string]$Build,
   [Parameter(Mandatory)][string]$Configuration,[string]$Only='',[int]$RunTimeoutMs=240000)
 # Mutation check of the recovery gate on the REAL program (DR-DRAFT-017). Each mutant is a piero.exe
-# built from the product's own compile and link commands with ONE source file replaced by a copy in
+# built by a CMake target with ONE source file replaced by a copy in
 # which the gate (or the state-folder choice, or the recovery command's lookup) is disabled; the
 # `state-gate` (or `first-run`, or `pictures`) ConPTY scenario is then run against it. A mutant is KILLED only when the scenario
 # passes on the unmodified program, then runs to its end and reports failed checks (exit 1) on
@@ -14,7 +14,6 @@ $ErrorActionPreference='Stop'
 Initialize-WfToolchain
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $buildRoot=(Resolve-Path -LiteralPath $Build).Path
-$ninja=Find-WfNinja (Find-WfVisualStudio)
 $root=Join-Path $buildRoot ('gate-mutants-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root|Out-Null
 $host_exe=Join-Path $buildRoot 'p0_conpty_host.exe'
@@ -92,18 +91,6 @@ $mutants=@(
  @{name='syntax_pin_missing_in_the_program';file='src/main.c';scenario='syntax';only='syntax_json_only';old='wf_synhost_configure(NULL, WF_SYNTAX_DLL_SHA256);';new='wf_synhost_configure(NULL, NULL);'},
  @{name='syntax_editor_never_wired_in_the_program';file='src/main_editor.c';scenario='syntax';only='syntax_editor';old='wf_es_set_syntax(lp->editor, wf_synworker_port(lp->syntax));';new='(void)lp;'}
 )
-$commands=@(& $ninja -C $buildRoot -t commands piero)
-if($LASTEXITCODE -ne 0 -or $commands.Count -lt 10){throw 'ninja could not print the build commands of piero'}
-$link=@($commands | Where-Object { $_ -match 'vs_link_exe' -and $_ -match '/out:piero\.exe' })
-if($link.Count -ne 1){throw 'the link command of piero was not found exactly once'}
-# the link step without the post-build copy that follows it
-$linkText=$link[0]
-$cut=$linkText.IndexOf(' && C:\WINDOWS\system32\cmd.exe /C "cd /D ')
-if($cut -lt 0){throw 'the post-build step was not found in the link command'}
-$linkCore=$linkText.Substring(0,$cut)
-# run cmake's link wrapper directly, without the cmd /C wrapper that ninja puts around it
-if($linkCore -notmatch '(?<=cd \. && )("[^"]*cmake\.exe" -E vs_link_exe.*)$'){throw 'the link command has an unexpected shape'}
-$linkCore=$Matches[1]
 function Invoke-GateScenario([string]$Scenario,[string]$OnlyCase,[string]$Child,
   [string]$Directory,[string]$Label) {
  $evidence=Join-Path $Directory 'evidence'
@@ -131,6 +118,14 @@ function Invoke-GateScenario([string]$Scenario,[string]$OnlyCase,[string]$Child,
 }
 $controls=@{}
 $results=@()
+try {
+$controlSaved=$ErrorActionPreference
+try {
+ $ErrorActionPreference='Continue'
+ & cmake --build $buildRoot --target piero --parallel 2 *> (Join-Path $root 'control-build.log')
+ $controlBuildExit=$LASTEXITCODE
+} finally {$ErrorActionPreference=$controlSaved}
+if($controlBuildExit -ne 0){throw "Unmodified product build failed; no mutant verdict is valid; see $root\control-build.log"}
 foreach($m in $mutants){
  if($Only -and $m.name -notmatch $Only){continue}
  $scenario=if($m.scenario){$m.scenario}else{'state-gate'}
@@ -143,7 +138,22 @@ foreach($m in $mutants){
   Copy-Item -LiteralPath (Join-Path $buildRoot 'piero.exe') -Destination $controlExe
   Copy-Item -LiteralPath (Join-Path $buildRoot 'languages') -Destination (Join-Path $controlDir 'languages') -Recurse
   Copy-Item -LiteralPath (Join-Path $buildRoot 'LICENSE') -Destination $controlDir -Force -ErrorAction SilentlyContinue
+  Copy-Item -LiteralPath (Join-Path $buildRoot 'LICENSES') -Destination $controlDir -Recurse
+  $syntax=Join-Path $buildRoot 'syntax'
+  if(Test-Path -LiteralPath $syntax){
+   Copy-Item -LiteralPath $syntax -Destination $controlDir -Recurse
+  }
+  $runtime=Join-Path $buildRoot 'piero.asan.runtime'
+  if(Test-Path -LiteralPath $runtime){
+   Copy-Item -LiteralPath $runtime -Destination $controlDir -Recurse
+  }
   $control=Invoke-GateScenario $scenario $m.only $controlExe $controlDir 'control'
+  if($control.ExitCode -eq 77 -and $control.Failed -eq 0){
+   Write-Host "SKIP: control prerequisites unavailable: $controlKey; see $controlDir"
+   $results+=@{name=$m.name;verdict='SKIP';reason='control prerequisite unavailable';directory=$controlDir}
+   $results | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $root 'mutations.json')
+   exit 77
+  }
   if($control.ExitCode -ne 0 -or $control.Failed -ne 0 -or $control.Passed -le 0){
    throw "Control failed (never a kill): $controlKey, $($control.Failed) failed checks, exit $($control.ExitCode); see $controlDir"
   }
@@ -162,30 +172,17 @@ foreach($m in $mutants){
   if(Test-Path -LiteralPath $header){'#include "'+$header.Replace('\','/')+'"'}else{$match.Value}
  })
  $mutantSrc=Join-Path $dir 'mutant.c';[IO.File]::WriteAllText($mutantSrc,$text)
- $obj=Join-Path $dir 'mutant.obj'
- $absolute=$src.Replace('/','\')
- $compile=@($commands | Where-Object { $_ -match 'clang-cl|\\cl\.exe' -and ($_.EndsWith(' -c -- '+$absolute) -or $_.EndsWith(' -c '+$absolute)) })
- if($compile.Count -ne 1){throw "The compile command of $($m.file) was not found exactly once ($($compile.Count))"}
- $line=$compile[0]
- $line=$line -replace '-clang:-MD ','' -replace '-clang:-MT\S+ ','' -replace '-clang:-MF\S+ ','' -replace '/showIncludes ',''
- $line=$line -replace '/Fo\S+',('/Fo"'+$obj+'"') -replace '/FdCMakeFiles\\piero\.dir\\',('/Fd"'+$dir+'\mutant.pdb"')
- if($line.EndsWith(' -c -- '+$absolute)){$line=$line.Substring(0,$line.Length-($absolute.Length+7))+' -c -- "'+$mutantSrc+'"'}
- else{$line=$line.Substring(0,$line.Length-($absolute.Length+4))+' -c "'+$mutantSrc+'"'}
- $oldObj=$null
- if($compile[0] -match '/Fo(CMakeFiles\\\S+\.obj)'){$oldObj=$Matches[1]}
  $exe=Join-Path $dir 'piero.exe'
- $l=$linkCore
- if($oldObj -and $l.Contains($oldObj)){$l=$l.Replace($oldObj,'"'+$obj+'"')}
- else{$l=$l.Replace('/nologo ','/nologo "'+$obj+'" ')} # a library member: the mutant defines its symbols first
- $l=$l.Replace('--intdir=CMakeFiles\piero.dir','--intdir="'+$dir+'"').Replace('/out:piero.exe','/out:"'+$exe+'"').Replace('/implib:piero.lib','/implib:"'+$dir+'\piero.lib"').Replace('/pdb:piero.pdb','/pdb:"'+$dir+'\piero.pdb"')
- $bat=Join-Path $dir 'build.bat'
- [IO.File]::WriteAllText($bat,"@echo off`r`ncd /d `"$buildRoot`"`r`n$line`r`nif errorlevel 1 exit /b 1`r`n$l`r`nexit /b %errorlevel%`r`n")
  $saved=$ErrorActionPreference
- try{$ErrorActionPreference='Continue';& cmd.exe /c $bat *> (Join-Path $dir 'build.log');$buildExit=$LASTEXITCODE}
+ try{
+  $ErrorActionPreference='Continue'
+  & cmake -S $repo -B $buildRoot "-DWF_GATE_MUTANT_SOURCE=$mutantSrc" "-DWF_GATE_MUTANT_ORIGINAL=$($m.file)" "-DWF_GATE_MUTANT_OUTPUT=$dir" *> (Join-Path $dir 'configure.log')
+  if($LASTEXITCODE -ne 0){throw 'Mutant configure failed, never a kill'}
+  & cmake --build $buildRoot --target wf_gate_mutant --parallel 2 *> (Join-Path $dir 'build.log')
+  $buildExit=$LASTEXITCODE
+ }
  finally{$ErrorActionPreference=$saved}
  if($buildExit -ne 0 -or !(Test-Path -LiteralPath $exe)){throw "Mutant build failed, never a kill: $($m.name); see $dir\build.log"}
- Copy-Item -LiteralPath (Join-Path $buildRoot 'languages') -Destination (Join-Path $dir 'languages') -Recurse
- Copy-Item -LiteralPath (Join-Path $buildRoot 'LICENSE') -Destination $dir -Force -ErrorAction SilentlyContinue
  $run=Invoke-GateScenario $scenario $m.only $exe $dir 'mutant'
  $verdict=if($run.ExitCode -eq 1 -and $run.Failed -gt 0){'KILLED'}else{'SURVIVED'}
  Write-Host "$($m.name): $verdict ($($run.Failed) failed checks, exit $($run.ExitCode), $($run.Seconds) s)"
@@ -193,8 +190,19 @@ foreach($m in $mutants){
  if($csv){Get-Content -LiteralPath $csv.FullName | Where-Object { $_ -match ',FAIL$' } | Select-Object -First 3 | ForEach-Object { Write-Host "    $($_.Split(',')[0])" }}
  $results+=@{name=$m.name;verdict=$verdict}
 }
+} finally {
+ # A normal build must not depend on retained scratch source paths.
+ $restoreSaved=$ErrorActionPreference
+ try {
+  $ErrorActionPreference='Continue'
+  & cmake -S $repo -B $buildRoot '-DWF_GATE_MUTANT_SOURCE:FILEPATH=' '-DWF_GATE_MUTANT_ORIGINAL:STRING=' '-DWF_GATE_MUTANT_OUTPUT:PATH=' *> (Join-Path $root 'restore-configure.log')
+  $restoreExit=$LASTEXITCODE
+ } finally {$ErrorActionPreference=$restoreSaved}
+ if($restoreExit -ne 0){throw "Cannot restore normal CMake configuration; see $root\restore-configure.log"}
+}
+if(!$results.Count){throw 'No gate mutants were evaluated'}
 $survived=@($results | Where-Object { $_.verdict -ne 'KILLED' })
 if($survived.Count){Write-Host ("SURVIVED: "+(($survived|ForEach-Object{$_.name}) -join ', '));Write-Host "kept: $root";exit 1}
-Remove-Item -LiteralPath $root -Recurse -Force
+Write-Host "Evidence retained: $root"
 Write-Host "PASS: $($results.Count) gate mutants killed"
 exit 0

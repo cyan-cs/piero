@@ -15,7 +15,7 @@ $mutants = @(
     @('freshness', 'app->now_ms - e->loaded <= WF_DIRCACHE_TTL', 'true'),
     @('generation', 'gen != c->flight', 'gen == 0'),
     @('partial', '!dir || dir->truncated', '!dir'))
-$compiler = (Get-Command clang-cl.exe).Source
+$compiler = (Get-Command clang-cl.exe | Select-Object -First 1).Source
 foreach ($mutation in $mutants) {
     $name, $old, $new = $mutation
     if ($original.IndexOf($old) -lt 0) { throw "Missing mutation anchor: $name" }

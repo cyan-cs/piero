@@ -3283,6 +3283,7 @@ static bool product_pictures(Product *pr)
 }
 
 #include "p0_pictures.c"
+#include "p0_prerequisites.h"
 
 /* This path omits association registration and the separate copy-queue trial.
  * It never substitutes for the complete product/safety test. */
@@ -3311,6 +3312,11 @@ static int scn_product(Ev *e, ProductScope scope)
 	int rc = 1;
 	bool ui_only = scope == PRODUCT_UI;
 	bool file_ops = scope == PRODUCT_FILE_OPS;
+	int prerequisite;
+
+	if (!file_ops && (prerequisite = require_appcontainer(e)) != 0) {
+		return prerequisite;
+	}
 
 	memset(&pr, 0, sizeof pr);
 	pr.e = e;
@@ -3321,6 +3327,16 @@ static int scn_product(Ev *e, ProductScope scope)
 		ev_check(e, "isolated_fixture", 0, "owned NTFS root",
 		        "unavailable", 0);
 		return 1;
+	}
+	if (file_ops &&
+	        (prerequisite = require_readable_ancestors(
+	                 e, p0_area_root(pr.lab.area))) != 0) {
+		if (p0_lab_close(&pr.lab, 1)) {
+			ev_check(e, "skipped_copy_fixture_cleanup", 0,
+			        "test drive released", "cleanup failed", false);
+			return 1;
+		}
+		return prerequisite;
 	}
 	if (PRODUCT_PICTURES == scope) {
 		if (product_setup(&pr) && product_pictures(&pr) &&

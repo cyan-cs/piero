@@ -369,14 +369,19 @@ static void an_unpolled_answer_is_not_delivered_after_a_newer_request(void)
 	CHECK(WF_OK == wf_gitworker_start(&w));
 	CHECK(WF_OK == wf_gitworker_repo(w, 1, &e, L"C:\\repo", false));
 	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(fake.entered, 5000));
-	while (!wf_gitworker_idle(w) &&
-	        WAIT_TIMEOUT ==
-	                WaitForSingleObject(wf_gitworker_event(w), 10)) {
-	}
-	Sleep(50); /* its answer is in the slot */
+	CHECK(WAIT_OBJECT_0 ==
+	        WaitForSingleObject(wf_gitworker_event(w), 5000));
+	/* Hold the second runner until the stale slot has been polled. Without
+	 * this barrier a fast second answer can overwrite the stale answer and
+	 * conceal a missing generation check. */
+	fake.release = CreateEventW(NULL, TRUE, FALSE, NULL);
+	CHECK(NULL != fake.release);
 	CHECK(WF_OK ==
 	        wf_gitworker_repo(w, 2, &e, L"C:\\second",
 	                false)); /* asked before the poll */
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(fake.entered, 5000));
+	CHECK(!wf_gitworker_poll(w, &a));
+	SetEvent(fake.release);
 	CHECK(wait_answer(w, &a, 5000) &&
 	        2 == a.gen); /* the first, still waiting, was dropped */
 	wf_gitanswer_free(&a);

@@ -13,7 +13,7 @@ $fixturePath = (Resolve-Path -LiteralPath $Fixture).Path
 $repo = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $repo "out/dircache-review/$Tag"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$compiler = (Get-Command clang-cl.exe).Source
+$compiler = (Get-Command clang-cl.exe | Select-Object -First 1).Source
 $linker = Join-Path (Split-Path -Parent $compiler) 'lld-link.exe'
 foreach ($kind in @('dircache', 'dir_enum')) {
     $units = @((Join-Path $PSScriptRoot "bench_$kind.c"))

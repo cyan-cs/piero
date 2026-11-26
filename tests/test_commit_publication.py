@@ -26,6 +26,7 @@ class PublicationHandoff(unittest.TestCase):
         self.env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, GIT_CONFIG_NOSYSTEM='1')
         script = Path(os.environ.get('WF_PUBLICATION_TOOL', ROOT / 'tools/commit_publication.ps1'))
         shutil.copyfile(script, self.repo / 'tools/commit_publication.ps1')
+        shutil.copyfile(ROOT / 'tools/wf_git.ps1', self.repo / 'tools/wf_git.ps1')
         generator = Path(os.environ.get('WF_PUBLICATION_GENERATOR', ROOT / 'tools/prepare_publication_handoff.py'))
         shutil.copyfile(generator, self.repo / 'tools/prepare_publication_handoff.py')
         self.git('init', '-q', '--initial-branch=main')

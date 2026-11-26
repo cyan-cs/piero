@@ -622,7 +622,6 @@ static void publish(WfImageWorker *w, const Req *r, WfImageResult *res)
 		w->result_serial = r->serial;
 		w->has_result = true;
 		res = NULL;
-		SetEvent(w->core.ready);
 	} else if (!r->prefetch) {
 		bump(&w->core.stats.discarded_results);
 	}
@@ -919,6 +918,12 @@ static DWORD WINAPI worker_main(LPVOID ctx)
 		AcquireSRWLockExclusive(&w->core.lock);
 		w->core.busy = false;
 		bump(&w->core.stats.completed_requests);
+		/* Publish completion only after request cleanup. An unread answer
+		 * then independently prevents idle, without a busy-thread race. */
+		if (!w->core.stop && w->has_result &&
+		        w->result_serial == w->serial) {
+			SetEvent(w->core.ready);
+		}
 		ReleaseSRWLockExclusive(&w->core.lock);
 	}
 	worker_release(w);

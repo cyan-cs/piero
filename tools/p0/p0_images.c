@@ -584,6 +584,10 @@ done:
 
 static int scn_images(Ev *e)
 {
+	int prerequisite = require_appcontainer(e);
+	if (prerequisite) {
+		return prerequisite;
+	}
 	bool ok = images_case(e);
 
 	ok = images_off_case(e) && ok;

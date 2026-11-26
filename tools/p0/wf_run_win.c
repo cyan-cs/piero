@@ -1,7 +1,7 @@
 #include "wf_run_win.h"
 #include <stdlib.h>
 
-static BOOL job_empty(HANDLE job, ULONGLONG deadline)
+static BOOL job_empty(HANDLE job, HANDLE completion, ULONGLONG deadline)
 {
 	JOBOBJECT_BASIC_ACCOUNTING_INFORMATION info;
 	for (;;) {
@@ -13,11 +13,22 @@ static BOOL job_empty(HANDLE job, ULONGLONG deadline)
 		if (!info.ActiveProcesses) {
 			return TRUE;
 		}
-		if (GetTickCount64() >= deadline) {
+		ULONGLONG now = GetTickCount64();
+		if (now >= deadline) {
 			SetLastError(ERROR_TIMEOUT);
 			return FALSE;
 		}
-		Sleep(10); /* bounded teardown in a test host, never the product UI */
+		DWORD message;
+		ULONG_PTR key;
+		LPOVERLAPPED overlapped;
+		/* Notifications are hints; recheck accounting even if one is lost. */
+		if (!GetQueuedCompletionStatus(completion, &message, &key,
+		            &overlapped,
+		            (DWORD)(deadline - now > 100 ? 100
+		                                         : deadline - now)) &&
+		        WAIT_TIMEOUT != GetLastError()) {
+			return FALSE;
+		}
 	}
 }
 
@@ -32,9 +43,12 @@ WfRunResult wf_run_process(const wchar_t *exe,
 	HANDLE streams[3] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE,
 	        INVALID_HANDLE_VALUE};
 	HANDLE job = NULL;
+	HANDLE completion = NULL;
 	STARTUPINFOEXW startup = {0};
 	PROCESS_INFORMATION process = {0};
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {0};
+	JOBOBJECT_ASSOCIATE_COMPLETION_PORT association;
+	ULONGLONG deadline;
 	SIZE_T bytes = 0;
 	DWORD wait, code;
 	BOOL assigned = FALSE;
@@ -67,6 +81,15 @@ WfRunResult wf_run_process(const wchar_t *exe,
 	                &limits, sizeof limits)) {
 		goto failed;
 	}
+	completion = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+	association.CompletionKey = job;
+	association.CompletionPort = completion;
+	if (!completion ||
+	        !SetInformationJobObject(job,
+	                JobObjectAssociateCompletionPortInformation,
+	                &association, sizeof association)) {
+		goto failed;
+	}
 	(void)InitializeProcThreadAttributeList(NULL, 1, 0, &bytes);
 	startup.lpAttributeList = malloc(bytes);
 	if (!startup.lpAttributeList) {
@@ -93,7 +116,7 @@ WfRunResult wf_run_process(const wchar_t *exe,
 	startup.StartupInfo.hStdOutput = streams[1];
 	startup.StartupInfo.hStdError = streams[2];
 	if (!CreateProcessW(exe, command, NULL, NULL, TRUE,
-	            CREATE_SUSPENDED | CREATE_NO_WINDOW |
+	            CREATE_SUSPENDED | DETACHED_PROCESS |
 	                    EXTENDED_STARTUPINFO_PRESENT,
 	            NULL, NULL, &startup.StartupInfo, &process)) {
 		goto failed;
@@ -102,6 +125,7 @@ WfRunResult wf_run_process(const wchar_t *exe,
 		goto failed;
 	}
 	assigned = TRUE;
+	deadline = GetTickCount64() + timeout_ms;
 	if (ResumeThread(process.hThread) == (DWORD)-1) {
 		goto failed;
 	}
@@ -116,7 +140,9 @@ WfRunResult wf_run_process(const wchar_t *exe,
 		result.state = 0xC0000000u == (code & 0xC0000000u)
 		        ? WF_RUN_CRASHED
 		        : WF_RUN_EXITED;
-		if (job_empty(job, GetTickCount64() + 100)) {
+		/* Root exit alone does not prove that its descendants have exited.
+		 * Use the remaining run budget, never an extra success grace period. */
+		if (job_empty(job, completion, deadline)) {
 			goto done;
 		}
 		result.error = GetLastError();
@@ -136,7 +162,7 @@ terminate:
 	} else {
 		wait = WaitForSingleObject(process.hProcess, 2000);
 		if (WAIT_OBJECT_0 != wait ||
-		        !job_empty(job, GetTickCount64() + 2000)) {
+		        !job_empty(job, completion, GetTickCount64() + 2000)) {
 			result.state = WF_RUN_TERMINATE_FAILED;
 			result.error = WAIT_TIMEOUT == wait ? ERROR_TIMEOUT
 			                                    : GetLastError();
@@ -170,6 +196,9 @@ done:
 		}
 		CloseHandle(process.hProcess);
 		CloseHandle(process.hThread);
+	}
+	if (completion) {
+		CloseHandle(completion);
 	}
 	if (startup.lpAttributeList) {
 		DeleteProcThreadAttributeList(startup.lpAttributeList);

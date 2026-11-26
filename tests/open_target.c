@@ -1,6 +1,7 @@
 /* The "program" a test association starts: records where it was started
  * from and which file it was given, next to that file as "<file>.seen".
- * Line 1: the working directory. Line 2: the file argument. UTF-16, no BOM. */
+ * Line 1: working directory. Line 2: file argument. Line 3: process identity.
+ * UTF-16, no BOM. */
 #include <windows.h>
 
 #include <wchar.h>
@@ -10,6 +11,7 @@ int wmain(int argc, wchar_t **argv)
 	wchar_t text[2200], seen[1100];
 	DWORD got, wrote;
 	HANDLE h;
+	FILETIME created, exited, kernel, user;
 
 	if (argc < 2 || wcslen(argv[1]) > 1000) {
 		return 2;
@@ -20,6 +22,19 @@ int wmain(int argc, wchar_t **argv)
 	}
 	swprintf(seen, 1100, L"%ls.seen", argv[1]);
 	swprintf(text + got, 1200, L"\n%ls\n", argv[1]);
+	if (!GetProcessTimes(
+	            GetCurrentProcess(), &created, &exited, &kernel, &user)) {
+		return 5;
+	}
+	{
+		size_t used = wcslen(text);
+		unsigned long long start =
+		        ((unsigned long long)created.dwHighDateTime << 32) |
+		        created.dwLowDateTime;
+
+		swprintf(text + used, 2200 - used, L"pid=%lu start=%llu\n",
+		        GetCurrentProcessId(), start);
+	}
 	h = CreateFileW(seen, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
 	        FILE_ATTRIBUTE_NORMAL, NULL);
 	if (INVALID_HANDLE_VALUE == h) {

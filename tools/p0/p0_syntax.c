@@ -123,6 +123,28 @@ static bool syn_install(
 		return false;
 	}
 	(void)exe_cap;
+#if RES_SANITIZED
+	/* The copied product keeps its embedded private-assembly dependency,
+	 * including the case with no syntax DLL installed. */
+	{
+		static const wchar_t *const runtime_files[] = {
+		        L"piero.asan.runtime.manifest",
+		        L"clang_rt.asan_dynamic-x86_64.dll"};
+		if (!gate_mkdir(g, L"install\\piero.asan.runtime")) {
+			return false;
+		}
+		for (size_t i = 0;
+		        i < sizeof runtime_files / sizeof *runtime_files; i++) {
+			swprintf(srcp, 1100, L"%ls\\piero.asan.runtime\\%ls",
+			        from, runtime_files[i]);
+			swprintf(rel, 1100, L"install\\piero.asan.runtime\\%ls",
+			        runtime_files[i]);
+			if (!gate_path(g, rel, dst) || !syn_copy(srcp, dst)) {
+				return false;
+			}
+		}
+	}
+#endif
 	if (!in->syntax_dll) {
 		return true;
 	}

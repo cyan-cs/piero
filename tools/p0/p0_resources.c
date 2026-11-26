@@ -549,5 +549,9 @@ done:
 
 static int scn_resources(Ev *e)
 {
+	int prerequisite = require_restart_manager(e);
+	if (prerequisite) {
+		return prerequisite;
+	}
 	return resources_case(e) ? (g_gate_skips ? 77 : 0) : 1;
 }

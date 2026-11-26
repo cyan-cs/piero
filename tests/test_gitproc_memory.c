@@ -15,6 +15,40 @@
 #include "wf_test.h"
 
 static bool fail_growth;
+static int fail_start;
+static HANDLE observed_child;
+
+static BOOL test_assign(HANDLE job, HANDLE process)
+{
+	if (fail_start) {
+		CHECK(DuplicateHandle(GetCurrentProcess(), process,
+		        GetCurrentProcess(), &observed_child, SYNCHRONIZE,
+		        FALSE, 0));
+	}
+	if (1 == fail_start) {
+		SetLastError(ERROR_ACCESS_DENIED);
+		return FALSE;
+	}
+	return AssignProcessToJobObject(job, process);
+}
+
+static DWORD test_resume(HANDLE thread)
+{
+	if (2 == fail_start) {
+		SetLastError(ERROR_ACCESS_DENIED);
+		return (DWORD)-1;
+	}
+	return ResumeThread(thread);
+}
+
+static BOOL test_exit_code(HANDLE process, LPDWORD code)
+{
+	if (3 == fail_start) {
+		SetLastError(ERROR_ACCESS_DENIED);
+		return FALSE;
+	}
+	return GetExitCodeProcess(process, code);
+}
 
 static void *test_realloc(void *p, size_t n)
 {
@@ -26,8 +60,14 @@ static void *test_realloc(void *p, size_t n)
 }
 
 #define realloc test_realloc
+#define AssignProcessToJobObject test_assign
+#define ResumeThread test_resume
+#define GetExitCodeProcess test_exit_code
 #include "../src/git/wf_gitproc_win.c"
 #undef realloc
+#undef AssignProcessToJobObject
+#undef ResumeThread
+#undef GetExitCodeProcess
 
 static WfStatus run_cmd(
         const wchar_t *script, size_t max_out, WfGitRunResult *r)
@@ -49,6 +89,31 @@ static WfStatus run_cmd(
 int main(void)
 {
 	WfGitRunResult r;
+	DWORD before, after;
+
+	/* CreatePipe/CreateProcess initialize process-wide Windows caches.
+	 * A standalone API probe retains a pipe File and threadpool/ETW handles
+	 * on first use; subsequent calls are stable. Establish that boundary
+	 * with a successful run, then require exact balance on every fault. */
+	CHECK(WF_OK == run_cmd(L"exit 0", 0, &r));
+	wf_gitproc_result_free(&r);
+	CHECK(GetProcessHandleCount(GetCurrentProcess(), &before));
+	for (fail_start = 1; fail_start <= 3; fail_start++) {
+		CHECK(WF_E_OS == run_cmd(L"echo owned-child", 0, &r));
+		CHECK(ERROR_ACCESS_DENIED == r.os_error);
+		CHECK(!r.out && !r.out_n);
+		CHECK(observed_child &&
+		        WAIT_OBJECT_0 ==
+		                WaitForSingleObject(observed_child, 0));
+		CloseHandle(observed_child);
+		observed_child = NULL;
+		wf_gitproc_result_free(&r);
+		CHECK(GetProcessHandleCount(GetCurrentProcess(), &after));
+		printf("git start fault=%d handles=%lu -> %lu\n", fail_start,
+		        before, after);
+		CHECK(before == after);
+	}
+	fail_start = 0;
 
 	/* the output cannot be held: out of memory, and nothing is returned */
 	fail_growth = true;

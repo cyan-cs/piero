@@ -96,12 +96,17 @@ static void report_out(const WfBatchReport *r, WfBxReport *o)
 }
 
 /* The engine's hook: the step that has just been done and checked. */
+void (*wf_batchworker_test_step)(size_t step);
+
 static void hook_at(void *ctx, const char *point, size_t step)
 {
 	WfBatchWorker *w = ctx;
 
 	if (!strcmp(point, "after_D")) {
 		InterlockedExchange(&w->progress, (LONG)(step + 1));
+		if (wf_batchworker_test_step) {
+			wf_batchworker_test_step(step);
+		}
 	}
 }
 

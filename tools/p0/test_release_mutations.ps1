@@ -1,6 +1,6 @@
 param([Parameter(Mandatory)][string]$Compiler,[Parameter(Mandatory)][string]$Build,
   [Parameter(Mandatory)][string]$Configuration,[string]$Only='',[string]$Test='',
-  [int]$MutantTimeoutMs=15000)
+  [int]$MutantTimeoutMs=15000,[int]$ControlTimeoutMs=0)
 # $MutantTimeoutMs is the HANG detector for ONE mutant's test process (the supervisor kills it and the
 # mutant is then reported as not completed, never as killed). It is not a budget for the whole table:
 # CTest runs one group per test file (-Test), each with its own limit. A mutant dies on its first FAIL
@@ -15,6 +15,8 @@ $buildRoot=(Resolve-Path -LiteralPath $Build).Path
 $root=Join-Path $buildRoot ('release-mutants-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root|Out-Null
 $san=Get-WfSanitizer $Compiler $buildRoot
+if($ControlTimeoutMs -le 0){$ControlTimeoutMs=$MutantTimeoutMs}
+$ControlTimeoutMs=$ControlTimeoutMs*$san.HangFactor
 $MutantTimeoutMs=$MutantTimeoutMs*$san.HangFactor
 $mutants=@(
  @{name='choice_processkey_guard';file='src/input/wf_choice.c';test='tests/test_choice.c';old='WF_VK_PROCESSKEY == ev->vk || (i = index_of(c, ev->ch)) < 0';new='(i = index_of(c, ev->ch)) < 0'},
@@ -210,7 +212,7 @@ bool wf_state_report_any'},
  @{name='stage_ignores_state_choice';file='src/preview/wf_dechost_client_win.c';test='tests/test_state_dir.c';old='wf_state_name(kind));';new='L"piero");'},
  @{name='stage_name_is_old';file='src/preview/wf_dechost_client_win.c';test='tests/test_state_dir.c';old='swprintf(out, cap, L"%ls\\piero.exe", dir);';new='swprintf(out, cap, L"%ls\\wfile.exe", dir);'},
  # What the user is told when the program cannot use its private state folder, or cannot copy (DR-DRAFT-017 follow-up).
- @{name='not_private_reads_as_access_denied';file='src/path/cwd_neutralize.c';test='tests/test_startup.c';old='*error = WF_PRIVATE_E_NOT_PRIVATE;';new='*error = ERROR_ACCESS_DENIED;'},
+ @{name='not_private_reads_as_access_denied';file='src/path/cwd_neutralize.c';test='tests/test_startup.c';old='DWORD error = WF_PRIVATE_E_NOT_PRIVATE, query;';new='DWORD error = ERROR_ACCESS_DENIED, query;'},
  @{name='link_reads_as_access_denied';file='src/path/cwd_neutralize.c';test='tests/test_startup.c';old='*error = ERROR_REPARSE_POINT_ENCOUNTERED;';new='*error = ERROR_ACCESS_DENIED;'},
  @{name='file_in_place_reads_as_access_denied';file='src/path/cwd_neutralize.c';test='tests/test_startup.c';old='*error = ERROR_DIRECTORY;';new='*error = ERROR_ACCESS_DENIED;'},
  @{name='state_link_reads_as_not_a_folder';file='src/base/wf_state_dir.c';test='tests/test_state_dir.c';old='*error = ERROR_REPARSE_POINT_ENCOUNTERED;';new='*error = ERROR_DIRECTORY;'},
@@ -301,15 +303,17 @@ bool wf_state_report_any'},
  @{name='batchplan_other_volume_allowed';file='src/xfer/wf_batchplan.c';test='tests/test_batchplan.c';old='if (it->id.volume != volume ||';new='if (0 ||'},
  @{name='batchplan_link_folder_allowed';file='src/xfer/wf_batchplan.c';test='tests/test_batchplan.c';old='if (parent[it->parent].link || to->link) {';new='if (0) {'},
  @{name='batchplan_missing_id_allowed';file='src/xfer/wf_batchplan.c';test='tests/test_batchplan.c';old='if (!(it->id.kind == WF_ID_STRONG) || !(parent[it->parent].id.kind == WF_ID_STRONG) || !(to->id.kind == WF_ID_STRONG)) {';new='if (0) {'},
- @{name='bulkname_number_wraps';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (mag && (int64_t)index > INT64_MAX / mag) {';new='if (mag && (int64_t)index > INT64_MAX / mag + 1000000) {'},
- @{name='bulkname_start_wraps';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if ((v > 0 && p->start > INT64_MAX - v) ||';new='if (0 ||'},
+ # Accept an overflowing number without actually executing undefined signed
+ # arithmetic: the assertion must reject acceptance, also under UBSan.
+ @{name='bulkname_number_wraps';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (mag && (int64_t)index > INT64_MAX / mag) { return false; }';new='if (mag && (int64_t)index > INT64_MAX / mag) { *value = 0; return true; }'},
+ @{name='bulkname_start_wraps';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if ((v > 0 && p->start > INT64_MAX - v) || (v < 0 && p->start < INT64_MIN - v)) { return false; }';new='if ((v > 0 && p->start > INT64_MAX - v) || (v < 0 && p->start < INT64_MIN - v)) { *value = 0; return true; }'},
  @{name='bulkname_extension_dropped';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (dot) { /* the extension goes straight into the name, then takes its case */';new='if (0) {'},
  @{name='bulkname_find_never_replaces';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (fl && i + fl <= n && !wcsncmp(stem + i, p->find, fl)) {';new='if (fl && i + fl <= n && !wcsncmp(stem + i, p->find, fl) && 0) {'},
  @{name='bulkname_folder_has_extension';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (!dir) {';new='(void)dir; if (1) {'},
  @{name='bulkname_upper_case_ignored';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (n && WF_BULK_CASE_UPPER == c) {';new='if (0 && n && WF_BULK_CASE_UPPER == c) {'},
  @{name='bulkname_long_name_cut_silently';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (o->n + n > WF_BULK_NAME_MAX) {';new='if (0) {'},
  @{name='bulkname_leading_dot_is_extension';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='for (size_t i = 1; i < len; i++) {';new='for (size_t i = 0; i < len; i++) {'},
- @{name='bulkname_lone_brace_accepted';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (L''}'' != t[i + 1]) {';new='if (0) {'},
+ @{name='bulkname_lone_brace_accepted';file='src/xfer/wf_bulkname.c';test='tests/test_bulkname.c';old='if (L''}'' != t[i + 1]) { return 0; }';new='if (L''}'' != t[i + 1]) { *kind = ''}''; return 1; }'},
  @{name='batchexec_replaces_an_existing_name';file='src/xfer/wf_batchexec_win.c';test='tests/test_batchexec.c';old='info->ReplaceIfExists = FALSE;';new='info->ReplaceIfExists = TRUE;'},
  @{name='batchexec_cancel_ignored';file='src/xfer/wf_batchexec_win.c';test='tests/test_batchexec.c';old='if (cancel && *cancel) {';new='(void)cancel; if (0) {'},
  @{name='batchexec_step_not_journaled_before_rename';file='src/xfer/wf_batchexec_win.c';test='tests/test_batchexec.c';old='if (WF_OK != wf_batchlog_mark(log, ''B'', k)) {';new='if (0) {'},
@@ -473,7 +477,7 @@ bool wf_state_report_any'},
  @{name='history_copy_row_has_no_undo';file='src/ui/wf_app_copy.c';test='tests/test_copy_ui.c';old='undo_uid = wf_app_undo_keep_created(app, r);';new='(void)wf_app_undo_keep_created(app, r);'},
  @{name='tabs_new_tab_goes_to_the_end';file='src/ui/wf_app_tabs.c';test='tests/test_tabs.c';old='at = app->tabs.cur + 1;';new='at = app->tabs.n;'},
  @{name='tabs_close_hides_a_failed_walk';file='src/ui/wf_app_tabs.c';test='tests/test_tabs.c';old='if (WF_OK != st) { app->tabs.going = false; app->tabs.closing = false;';new='if (0) { app->tabs.going = false; app->tabs.closing = false;'},
- @{name='replace_all_cursor_inside_a_character';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='while (keep.col > 0 && keep.col < l->len &&';new='while (0 && keep.col > 0 && keep.col < l->len &&'},
+ @{name='replace_all_cursor_inside_a_character';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='while (keep.col > 0 && keep.col < l->len &&';new='while ((void)l, 0 && keep.col > 0 && keep.col < l->len &&'},
  @{name='undo_group_repeats_done_records';file='src/edit/wf_eundo.c';test='tests/test_editor.c';old='*last = u->pos - 1;';new='*last = *last;'},
  @{name='redo_group_repeats_done_records';file='src/edit/wf_eundo.c';test='tests/test_editor.c';old='*first = u->pos; /* likewise for a group redone in part */';new='*first = *first;'},
  @{name='undo_apply_without_a_copy';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='st = rollback_begin(&rb, e, r->at, end, put, put_n);';new='memset(&rb, 0, sizeof rb); st = WF_OK; (void)put_n;'},
@@ -632,7 +636,7 @@ bool wf_state_report_any'},
  @{name='git_read_only_options_are_dropped';file='src/git/wf_gitbackend_win.c';test='tests/test_git.c';old='L"-c", L"core.fsmonitor=false", NULL};';new='NULL};'},
  @{name='git_the_prompt_is_not_switched_off';file='src/git/wf_gitbackend_win.c';test='tests/test_git.c';old='L"GIT_TERMINAL_PROMPT=0", L"GIT_OPTIONAL_LOCKS=0", NULL};';new='L"GIT_OPTIONAL_LOCKS=0", NULL};'},
  @{name='gitproc_keeps_git_dir';file='src/git/wf_gitproc_win.c';test='tests/test_git.c';old='static const wchar_t *const drop_env[] = {L"GIT_DIR", L"GIT_WORK_TREE",';new='static const wchar_t *const drop_env[] = {L"GIT_DIRX", L"GIT_WORK_TREE",'},
- @{name='gitproc_extra_environment_does_not_win';file='src/git/wf_gitproc_win.c';test='tests/test_git.c';old='skip = n && CSTR_EQUAL == CompareStringOrdinal(p, (int)n,';new='skip = 0 && n && CSTR_EQUAL == CompareStringOrdinal(p, (int)n,'},
+ @{name='gitproc_extra_environment_does_not_win';file='src/git/wf_gitproc_win.c';test='tests/test_git.c';old='skip = n && CSTR_EQUAL == CompareStringOrdinal(p, (int)n,';new='skip = ((void)n, 0) && n && CSTR_EQUAL == CompareStringOrdinal(p, (int)n,'},
  @{name='gitproc_output_is_not_limited';file='src/git/wf_gitproc_win.c';test='tests/test_git.c';old='run->max_out ? run->max_out : (size_t)-1 - 1, true,';new='(size_t)-1 - 1, true,'},
  @{name='gitproc_quotes_every_argument';file='src/git/wf_gitproc_win.c';test='tests/test_git.c';old='if (needs_quotes(args[i])';new='if (1 || needs_quotes(args[i])'},
  @{name='gitworker_stale_answer_is_published';file='src/git/wf_gitworker.c';test='tests/test_git_worker.c';old='if (!w->core.stop && (LONG)a->gen == w->newest[j->kind]) {';new='if (!w->core.stop) {'},
@@ -665,12 +669,12 @@ bool wf_state_report_any'},
  @{name='gitworker_no_dotgit_still_runs_git';file='src/git/wf_gitworker.c';test='tests/test_git_worker.c';old='a.state = WF_GITR_NOT_REPO; /* no .git above: no process, no wsl.exe probe */';new='(void)0;'},
  @{name='gitworker_the_answer_does_not_name_what_was_asked';file='src/git/wf_gitworker.c';test='tests/test_git_worker.c';old='a.asked = wf_path_dup(rq->root);';new='a.asked = wf_path_dup(L"");'},
  @{name='gitworker_a_base_is_read_in_the_folder_of_the_file';file='src/git/wf_gitworker.c';test='tests/test_git_worker.c';old='root = root_buf;';new='root = rq->path;'},
- @{name='gitui_a_found_repository_is_not_adopted';file='src/ui/wf_app_git.c';test='tests/test_git_ui.c';old='app->git.root = root; app->git.prefix = prefix; } was_resolve = !app->git.resolved;';new='free(root); free(prefix); } was_resolve = !app->git.resolved;'},
+ @{name='gitui_a_found_repository_is_not_adopted';file='src/ui/wf_app_git.c';test='tests/test_git_ui.c';old='app->git.root = root; app->git.prefix = prefix; } was_resolve = !app->git.resolved;';new='free(root); free(prefix); app->git.root = NULL; app->git.prefix = NULL; } was_resolve = !app->git.resolved;'},
  @{name='imgcheck_png_header_values_are_not_checked';file='src/preview/wf_image_check.c';test='tests/test_image_hostile.c';old='if (first && !png_ihdr_ok(data + at + 8)) {';new='if (0 && first && !png_ihdr_ok(data + at + 8)) {'},
  @{name='imgcheck_png_compression_and_filter_methods_ignored';file='src/preview/wf_image_check.c';test='tests/test_image_hostile.c';old='return depth_ok && 0 == h[10] && 0 == h[11] && h[12] <= 1;';new='return depth_ok && h[12] <= 1;'},
  @{name='imgcheck_png_crc_table_is_wrong';file='src/preview/wf_image_check.c';test='tests/test_image_hostile.c';old='c = c & 1 ? (c >> 1) ^ 0xEDB88320u : c >> 1;';new='c = c & 1 ? (c >> 1) ^ 0xEDB88321u : c >> 1;'},
  @{name='imgdecode_pixel_limit_is_gone';file='src/preview/wf_decode_win.c';test='tests/test_image_hostile.c';old='if ((unsigned long long)w * h > WF_DECODE_SOURCE_PIXELS) {';new='if (0) {'},
- @{name='imgdecode_a_damaged_bitmap_is_called_unsupported';file='src/preview/wf_decode_win.c';test='tests/test_decode_win.c';old='if (WINCODEC_ERR_UNKNOWNIMAGEFORMAT == hr && has_picture_signature(data, n)) {';new='if (0 && WINCODEC_ERR_UNKNOWNIMAGEFORMAT == hr && has_picture_signature(data, n)) {'},
+ @{name='imgdecode_a_damaged_bitmap_is_called_unsupported';file='src/preview/wf_decode_win.c';test='tests/test_decode_win.c';old='if (WINCODEC_ERR_UNKNOWNIMAGEFORMAT == hr && has_picture_signature(data, n)) {';new='if ((void)data, (void)n, 0 && WINCODEC_ERR_UNKNOWNIMAGEFORMAT == hr && has_picture_signature(data, n)) {'},
  @{name='imgdecode_any_open_failure_on_a_picture_is_damage';file='src/preview/wf_decode_win.c';test='tests/test_decode_win.c';old='return status_of_wic(hr); } /* `checked` is 0';new='return has_picture_signature(data, n) ? WF_DSTAT_CORRUPT : status_of_wic(hr); } /* `checked` is 0'},
  @{name='gitui_unverified_letters_are_shown';file='src/ui/wf_app_git.c';test='tests/test_git_ui.c';old='0 == app->git.table.n || !git_verified(app)) {';new='0 == app->git.table.n) {'},
  @{name='gitui_a_nested_repository_is_not_looked_for';file='src/ui/wf_app_git.c';test='tests/test_git_ui.c';old='locate(app); /* a nearer .git may be below the root */';new='(void)0;'},
@@ -705,7 +709,7 @@ bool wf_state_report_any'},
  @{name='extract_total_not_refused_early';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='out->declared_bytes > lim.max_total_bytes) {';new='0) {'},
  @{name='extract_file_limit_ignored';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='if (!(nd->flags & N_NOSIZE) && nd->size > lim.max_file_bytes) {';new='if (0) {'},
  @{name='extract_checksum_taken_for_read_error';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='*kind = message_has(m, "CRC") ? WF_XI_CHECKSUM';new='*kind = 0 ? WF_XI_CHECKSUM'},
- @{name='extract_nested_item_taken_twice';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='if (at != node && chosen[at]) {';new='if (0 && at != node && chosen[at]) {'},
+ @{name='extract_nested_item_taken_twice';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='if (at != node && chosen[at]) {';new='if ((void)chosen, 0 && at != node && chosen[at]) {'},
  @{name='extract_bytes_not_counted';file='src/archive/wf_archive.c';test='tests/test_archive.c';old='st->bytes += (uint64_t)k;';new='st->bytes += 0u * (uint64_t)k;'},
  @{name='extract_job_never_merges';file='src/xfer/wf_extract_win.c';test='tests/test_extract_win.c';old='es.merge_folders = true;';new='es.merge_folders = false;'},
  @{name='extract_thrown_away_file_stays_staged';file='src/xfer/wf_extract_win.c';test='tests/test_extract_win.c';old='if (WF_OWNED_DELETED == r || WF_OWNED_ABSENT == r) {';new='if (0 && (WF_OWNED_DELETED == r || WF_OWNED_ABSENT == r)) {'},
@@ -775,9 +779,29 @@ bool wf_state_report_any'},
  @{name='syntax_editor_colours_not_kept_in_place';file='src/edit/wf_estsyntax.c';test='tests/test_esession.c';old='wf_synov_retarget(&ts->ov, ts->flat, ts->flat_len);';new='(void)0;'}
 )
 $results=@()
+$controls=@{}
 foreach($m in $mutants){
  if($Only -and $m.name -notmatch $Only){continue}
  if($Test -and $m.test -ne $Test){continue}
+ if(!$controls.ContainsKey($m.test)) {
+  $controlName=[IO.Path]::GetFileNameWithoutExtension($m.test)
+  $controlExe=Join-Path $buildRoot ($controlName+'.exe')
+  $controlDir=Join-Path $root ('control-'+$controlName)
+  New-Item -ItemType Directory -Path $controlDir|Out-Null
+  $runner=Join-Path $buildRoot 'p0_run.exe'
+  $controlReceipt=Join-Path $controlDir 'process.json'
+  & $runner $ControlTimeoutMs $controlExe (Join-Path $controlDir 'test.log') (Join-Path $controlDir 'test-error.log') $controlReceipt
+  if($LASTEXITCODE -ne 0){throw "Control supervisor failed: $controlName"}
+  $control=Get-Content -LiteralPath $controlReceipt -Raw | ConvertFrom-Json
+  $controlVerdict=Get-WfControlVerdict $control
+  if($controlVerdict -eq 'SKIP'){
+   Write-Host "SKIP: unmodified control prerequisites unavailable: $controlName; see $controlDir"
+   Get-Content -LiteralPath (Join-Path $controlDir 'test.log') | Write-Host
+   exit 77
+  }
+  if($controlVerdict -ne 'PASS'){throw "Unmodified control failed; no mutant verdict is valid: $controlName; see $controlDir"}
+  $controls[$m.test]=$true
+ }
  $dir=Join-Path $root $m.name;New-Item -ItemType Directory -Path $dir|Out-Null
  $source=[IO.File]::ReadAllText((Join-Path $repo $m.file))
  $count=Measure-WfAnchor $source $m.old
@@ -915,6 +939,7 @@ foreach($m in $mutants){
  if($m.test -eq 'tests/test_searchworker_win.c'){
   $arguments+=(Join-Path $buildRoot 'wfsmartgo.lib')
   $arguments+=@((Join-Path $buildRoot 'wfhash.lib'),'bcrypt.lib')
+  $arguments+=@((Join-Path $buildRoot 'p0_common.lib'),'advapi32.lib')
  }
  if($m.test -eq 'tests/test_sha256.c'){
   $arguments+=@((Join-Path $buildRoot 'wfhash.lib'),'bcrypt.lib')
@@ -978,8 +1003,10 @@ foreach($m in $mutants){
  }
  $arguments=Add-WfSanitizerArgs $arguments $san
  $saved=$ErrorActionPreference
+ $compileClock=[Diagnostics.Stopwatch]::StartNew()
  try{$ErrorActionPreference='Continue';& $Compiler @arguments *> (Join-Path $dir 'build.log');$compileExit=$LASTEXITCODE}
  finally{$ErrorActionPreference=$saved}
+ $compileClock.Stop()
  if($compileExit -ne 0){throw "Mutant compile failed, never a kill: $($m.name)"}
  $runner=Join-Path $buildRoot 'p0_run.exe'
  $receiptPath=Join-Path $dir 'process.json'
@@ -994,6 +1021,7 @@ foreach($m in $mutants){
  $exitCode=[int]$receipt.exit_code
  $verdict=Test-WfMutant $m.name $dir $exitCode
  $verdict | Add-Member -NotePropertyName run_ms -NotePropertyValue $elapsedMs
+ $verdict | Add-Member -NotePropertyName compile_ms -NotePropertyValue ([int]$compileClock.Elapsed.TotalMilliseconds)
  Write-Host "  $($m.name): ${elapsedMs} ms"
  $results+=$verdict
 }

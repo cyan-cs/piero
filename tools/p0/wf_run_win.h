@@ -21,7 +21,8 @@ typedef struct
 
 /* Test tools only. command is a writable CreateProcess command line.
  * The job is assigned while suspended; only three explicit stdio handles are
- * inherited. Timeout never means a successful test, even after a confirmed kill. */
+ * inherited, without allocating a console host. Root and job completion share
+ * the run deadline. Timeout never means success, even after a confirmed kill. */
 WfRunResult wf_run_process(const wchar_t *exe,
         wchar_t *command,
         const wchar_t *out,

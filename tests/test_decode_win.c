@@ -382,7 +382,9 @@ static void a_pdf_page_is_rendered_to_the_box(void)
 	CHECK(WF_DSTAT_OK ==
 	        wf_decode_pdf(pdf_two_page, sizeof pdf_two_page, 0, 400, 500,
 	                NULL, &pm, &info));
-	CHECK(GetTickCount() - t0 < 5000);
+	DWORD elapsed = GetTickCount() - t0;
+	printf("PDF first activation and page render: %lu ms\n", elapsed);
+	CHECK(elapsed < 5000);
 	CHECK(2 == info.page_count && 816 == info.src_w && 1056 == info.src_h);
 	/* 816 x 1056 into 400 x 500: height-limited, 386 wide */
 	CHECK(386 == pm->w && 500 == pm->h);
@@ -407,10 +409,13 @@ static void a_rotated_page_comes_out_turned(void)
 {
 	WfPixmap *pm = NULL;
 	WfDecodeInfo info = {0};
+	ULONGLONG t0 = GetTickCount64();
 
 	CHECK(WF_DSTAT_OK ==
 	        wf_decode_pdf(pdf_two_page, sizeof pdf_two_page, 1, 400, 500,
 	                NULL, &pm, &info));
+	printf("PDF subsequent page render: %llu ms\n",
+	        (unsigned long long)(GetTickCount64() - t0));
 	CHECK(1056 == info.src_w && 816 == info.src_h); /* landscape now */
 	CHECK(400 == pm->w && 309 == pm->h);
 	wf_pixmap_free(pm);

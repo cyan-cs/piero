@@ -24,7 +24,8 @@ $compiler = if ($Toolchain -eq 'clang' -and $env:PIERO_LLVM_ROOT) {
   $selected = Join-Path $env:PIERO_LLVM_ROOT 'bin/clang-cl.exe'
   if (!(Test-Path -LiteralPath $selected -PathType Leaf)) { throw 'Selected LLVM compiler is missing' }
   (Resolve-Path -LiteralPath $selected).Path
-} else { (Get-Command $compilerName -ErrorAction Stop).Source }
+} else { (Get-Command $compilerName -CommandType Application -ErrorAction Stop |
+    Select-Object -First 1).Source }
 $compiler = $compiler.Replace('\', '/')
 $cachePath = Join-Path $BuildDirectory 'CMakeCache.txt'
 if (Test-Path -LiteralPath $cachePath) {

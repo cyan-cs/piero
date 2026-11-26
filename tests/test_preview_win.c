@@ -139,7 +139,45 @@ int main(void)
 		}
 	}
 	CHECK(GetProcessHandleCount(GetCurrentProcess(), &after));
+	printf("preview normal handles=%lu -> %lu\n", before, after);
 	CHECK(before == after);
+	/* Repeat real acquisition, cancellation and teardown, including the
+	 * file/ancestor pins. Each turn must return to exactly the baseline. */
+	h = CreateFileW(
+	        file, GENERIC_WRITE, 0, NULL, TRUNCATE_EXISTING, 0, NULL);
+	CHECK(INVALID_HANDLE_VALUE != h);
+	if (INVALID_HANDLE_VALUE != h) {
+		CHECK(WriteFile(h, "sample", 6, &written, NULL) &&
+		        6 == written);
+		CloseHandle(h);
+	}
+	for (unsigned cycle = 0; cycle < 100; cycle++) {
+		CHECK(WF_OK ==
+		        wf_previewworker_start(&w, WF_PREVIEW_BYTES, 932));
+		if (!w) {
+			break;
+		}
+		port = wf_previewworker_port(w);
+		CHECK(WF_OK == port.submit(port.ctx, 1, file, false));
+		port.cancel(port.ctx);
+		CHECK(WF_OK == port.submit(port.ctx, 2, file, false));
+		p = fetch(w, 2);
+		CHECK(p && WF_PREVIEW_TEXT == p->kind);
+		wf_preview_free(p);
+		WfWorkerStopReport report = wf_previewworker_stop(w);
+		CHECK(WF_OK == report.status && !report.deferred);
+		if (report.completion) {
+			CHECK(WAIT_OBJECT_0 ==
+			        WaitForSingleObject(report.completion, 3000));
+			CloseHandle(report.completion);
+		}
+		CHECK(GetProcessHandleCount(GetCurrentProcess(), &after));
+		if (after != before) {
+			printf("preview normal cycle=%u handles=%lu -> %lu\n",
+			        cycle, before, after);
+		}
+		CHECK(after == before);
+	}
 	CHECK(0 == p0_lab_close(&lab, 0 != wf_test_failures));
 	return TEST_RESULT();
 }

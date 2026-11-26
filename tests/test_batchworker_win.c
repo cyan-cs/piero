@@ -273,6 +273,19 @@ static bool wait_progress(size_t at_least)
 	return false;
 }
 
+static HANDLE step_entered, step_release;
+static volatile LONG step_timed_out;
+
+static void hold_first_step(size_t step)
+{
+	if (!step) {
+		SetEvent(step_entered);
+		if (WAIT_OBJECT_0 != WaitForSingleObject(step_release, 5000)) {
+			InterlockedExchange(&step_timed_out, 1);
+		}
+	}
+}
+
 static void esc_in_the_middle_puts_every_name_back(void)
 {
 	WfBxReport rep;
@@ -280,24 +293,35 @@ static void esc_in_the_middle_puts_every_name_back(void)
 	WfBxDone d;
 
 	fresh();
-	make_set(2000);
+	/* Two steps suffice for cancellation after one verified rename. The
+	 * separate thousand-file case retains the scale/IO coverage. */
+	make_set(2);
+	step_entered = CreateEventW(NULL, TRUE, FALSE, NULL);
+	step_release = CreateEventW(NULL, TRUE, FALSE, NULL);
+	CHECK(step_entered && step_release);
+	wf_batchworker_test_step = hold_first_step;
 	start_worker();
 	job = prepared(&rep);
 	CHECK(WF_OK == port.run(port.ctx, 9, job));
-	CHECK(wait_progress(1));
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(step_entered, 5000));
 	port.cancel(port.ctx);
+	SetEvent(step_release);
 	d = wait_done(180000);
 	CHECK(9 == d.gen);
 	CHECK(WF_BX_ROLLED_BACK == d.rep.result);
-	CHECK(d.rep.steps_done >= 1 && d.rep.steps_done < 2000);
+	CHECK(1 == d.rep.steps_done);
 	CHECK(d.rep.rolled_back == d.rep.steps_done && 0 == d.rep.not_restored);
 	CHECK(all_there(false));
 	CHECK(0 ==
 	        port.unfinished(
 	                port.ctx)); /* the journal ends: ROLLED_BACK is closed */
-	printf("cancelled after %zu of 2000 steps, all put back\n",
+	printf("cancelled after %zu of 2 steps, all put back\n",
 	        d.rep.steps_done);
 	wf_batchworker_stop(worker);
+	wf_batchworker_test_step = NULL;
+	CHECK(!step_timed_out);
+	CloseHandle(step_release);
+	CloseHandle(step_entered);
 }
 
 static void stopping_the_worker_during_a_run_puts_the_names_back_first(void)

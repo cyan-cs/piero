@@ -233,7 +233,7 @@ target_link_libraries(test_sha256 PRIVATE wfhash)
 target_include_directories(test_sha256 PRIVATE tests)
 add_test(NAME sha256 COMMAND test_sha256)
 add_executable(test_searchworker_win tests/test_searchworker_win.c src/fs/wf_enum_win.c)
-target_link_libraries(test_searchworker_win PRIVATE wfsmartgo wfhash wfcore)
+target_link_libraries(test_searchworker_win PRIVATE wfsmartgo wfhash wfcore p0_common)
 target_include_directories(test_searchworker_win PRIVATE tests)
 add_test(NAME searchworker_win COMMAND test_searchworker_win)
 set_tests_properties(searchworker_win PROPERTIES TIMEOUT 600)
@@ -250,6 +250,21 @@ add_executable(test_startup tests/test_startup.c src/path/cwd_neutralize.c)
 target_link_libraries(test_startup PRIVATE wfcore wfstorage p0_lab advapi32)
 target_include_directories(test_startup PRIVATE tests)
 add_test(NAME startup COMMAND test_startup)
+add_executable(test_private_owner tests/test_private_owner.c)
+target_link_libraries(test_private_owner PRIVATE wfcore wfstorage p0_lab advapi32)
+target_include_directories(test_private_owner PRIVATE tests)
+add_test(NAME private_owner COMMAND test_private_owner)
+set_tests_properties(private_owner PROPERTIES TIMEOUT 30 RESOURCE_LOCK wf_dos_drive)
+add_executable(test_process_facts tests/test_process_facts.c)
+target_link_libraries(test_process_facts PRIVATE wfcore advapi32 user32)
+target_include_directories(test_process_facts PRIVATE tests)
+add_test(NAME process_facts COMMAND test_process_facts)
+set_tests_properties(process_facts PROPERTIES TIMEOUT 20)
+foreach(name git_resolver license_checkout)
+  add_test(NAME ${name} COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/test_${name}.py")
+  set_tests_properties(${name} PROPERTIES TIMEOUT 45 LABELS non-destructive)
+endforeach()
 add_executable(test_diag_format tests/test_diag_format.c)
 target_link_libraries(test_diag_format PRIVATE wfstorage)
 target_include_directories(test_diag_format PRIVATE tests)
@@ -328,7 +343,7 @@ if(WF_PWSH)
   add_test(NAME ui_audit COMMAND $<TARGET_FILE:p0_conpty_host>
     --scenario ui-audit --child $<TARGET_FILE:piero>
     --results ${CMAKE_CURRENT_BINARY_DIR}/ui-evidence --label ctest)
-  set_tests_properties(ui_audit PROPERTIES TIMEOUT 90)
+  set_tests_properties(ui_audit PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
   add_test(NAME recovery_mutations COMMAND ${WF_PWSH} -NoProfile -ExecutionPolicy Bypass -File
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/p0/test_recovery_mutations.ps1
     -Compiler ${CMAKE_C_COMPILER} -Build ${CMAKE_CURRENT_BINARY_DIR} -Configuration $<CONFIG>)
@@ -349,23 +364,44 @@ if(WF_PWSH)
     list(GET parts 0 mutant_test_file)
     list(GET parts 1 mutant_test_name)
     set(mutant_hang_limit 15000)
-    if(mutant_test_name STREQUAL "test_extract_win")
-      # the test makes 4000 entries, each flushed to disk: 10 s on a fast disk,
-      # over a minute on a slow one. A mutant is still only killed by a failed
-      # check and exit code 1; this is only the limit for a hang.
+    if(mutant_test_name STREQUAL "test_extract_win" OR
+        mutant_test_name STREQUAL "test_batchworker_win")
+      # Extraction creates 4000 flushed entries. Batch cancellation/stop also
+      # exercises thousands of durable operations (19.4 s in the CI control)
+      # with a bounded 180 s test wait. Allow that control to finish before
+      # judging mutants; only an assertion and exit 1 count as a kill.
       set(mutant_hang_limit 240000)
+    endif()
+    set(control_hang_limit ${mutant_hang_limit})
+    if(mutant_test_name STREQUAL "test_batchexec")
+      # The complete control includes recovery children and the large fixture
+      # (21.98 s observed). Reuse its established ordinary CTest budget; keep
+      # the 15 s fail-fast mutant hang detector unchanged.
+      get_test_property(batchexec TIMEOUT control_seconds)
+      math(EXPR control_hang_limit "${control_seconds} * 1000")
     endif()
     add_test(NAME release_mutations_${mutant_test_name} COMMAND ${WF_PWSH} -NoProfile -ExecutionPolicy Bypass -File
       ${CMAKE_CURRENT_SOURCE_DIR}/tools/p0/test_release_mutations.ps1
       -Compiler ${CMAKE_C_COMPILER} -Build ${CMAKE_CURRENT_BINARY_DIR} -Configuration $<CONFIG>
-      -Test ${mutant_test_file} -MutantTimeoutMs ${mutant_hang_limit})
+      -Test ${mutant_test_file} -MutantTimeoutMs ${mutant_hang_limit}
+      -ControlTimeoutMs ${control_hang_limit})
+    string(REGEX MATCHALL "test='${mutant_test_file}'" group_entries "${WF_RELEASE_MUTANTS}")
+    list(LENGTH group_entries group_count)
+    # Each case has its own hang deadline. Budget the group for every case,
+    # one unmodified control, and up to 30 seconds of compilation per case;
+    # a 180-second group could interrupt healthy 10-second editor cases.
+    math(EXPR group_budget "${group_count} * (${mutant_hang_limit} / 1000 + 30) + ${control_hang_limit} / 1000 + 30")
+    if(WF_SANITIZE)
+      math(EXPR group_budget "${group_budget} * 4")
+    endif()
+    set_tests_properties(release_mutations_${mutant_test_name} PROPERTIES
+      TIMEOUT ${group_budget} SKIP_RETURN_CODE 77)
     list(APPEND WF_RELEASE_MUTATION_GROUPS release_mutations_${mutant_test_name})
   endforeach()
   list(LENGTH WF_RELEASE_MUTATION_GROUPS WF_RELEASE_MUTATION_GROUP_COUNT)
   if(WF_RELEASE_MUTATION_GROUP_COUNT LESS 20)
     message(FATAL_ERROR "release mutation table parsed into ${WF_RELEASE_MUTATION_GROUP_COUNT} groups")
   endif()
-  set_tests_properties(${WF_RELEASE_MUTATION_GROUPS} PROPERTIES TIMEOUT 180)
   # the groups of the syntax tests copy the DLL and the grammars for every mutant
   if(TEST release_mutations_test_extract_win)
     set_tests_properties(release_mutations_test_extract_win PROPERTIES TIMEOUT 2400)
@@ -583,7 +619,8 @@ if(WF_SANITIZE)
   set_property(TARGET asan_pool_dll PROPERTY LINK_OPTIONS "${WF_SYN_TEST_LINK_OPTIONS}")
   target_compile_options(asan_pool_dll PRIVATE /O2 /GF)
   add_executable(test_asan_pool_dll tests/test_asan_pool_dll.c)
-  target_link_libraries(test_asan_pool_dll PRIVATE asan_pool_dll)
+  target_include_directories(test_asan_pool_dll PRIVATE tests)
+  add_dependencies(test_asan_pool_dll asan_pool_dll)
   add_test(NAME asan_pool_dll COMMAND test_asan_pool_dll)
   add_test(NAME sanitizer_detect_dll_global COMMAND ${CMAKE_COMMAND}
     -DPROGRAM=$<TARGET_FILE:test_asan_pool_dll> -DMODE=asan_global
@@ -704,7 +741,7 @@ set_tests_properties(copy_source_win copy_source_faults owned_integrity xfer_win
   startup preview_lifetime recovery_cli table_win PROPERTIES RESOURCE_LOCK wf_dos_drive)
 if(WF_PWSH)
   set_tests_properties(product_tui ui_audit worker_mutations preflight_mutations
-    ${WF_RELEASE_MUTATION_GROUPS} PROPERTIES RESOURCE_LOCK wf_dos_drive)
+    PROPERTIES RESOURCE_LOCK wf_dos_drive)
 endif()
 
 add_executable(test_sixel_conpty tests/test_sixel_conpty.c src/term/wf_term.c)
@@ -749,7 +786,7 @@ set_tests_properties(shutdown_go PROPERTIES TIMEOUT 30)
 add_test(NAME basic_file_operations COMMAND $<TARGET_FILE:p0_conpty_host>
   --scenario file-ops --child $<TARGET_FILE:piero>
   --results ${CMAKE_CURRENT_BINARY_DIR}/basic-file-operations-evidence --label ctest)
-set_tests_properties(basic_file_operations PROPERTIES TIMEOUT 120)
+set_tests_properties(basic_file_operations PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77)
 # DR-DRAFT-017 through the real program: the recovery gate (copy and replacing
 # save refused while the older state folder holds unresolved or unreadable
 # records), its release by --abandon-recovery, and the state-folder choice. One
@@ -948,7 +985,7 @@ add_test(NAME state_gate_mutations COMMAND ${WF_PWSH} -NoProfile -ExecutionPolic
   ${CMAKE_CURRENT_SOURCE_DIR}/tools/p0/test_gate_mutations.ps1
   -Compiler ${CMAKE_C_COMPILER} -Build ${CMAKE_CURRENT_BINARY_DIR} -Configuration $<CONFIG>)
 set_tests_properties(state_gate_mutations PROPERTIES TIMEOUT 4800
-  RESOURCE_LOCK wf_dos_drive)
+  RESOURCE_LOCK wf_dos_drive SKIP_RETURN_CODE 77)
 
 add_executable(test_stage_faults tests/test_stage_faults.c)
 target_link_libraries(test_stage_faults PRIVATE wfdecode p0_lab)
@@ -1173,6 +1210,9 @@ target_link_libraries(test_lock PRIVATE wflock)
 target_include_directories(test_lock PRIVATE tests)
 add_dependencies(test_lock lock_helper)
 add_test(NAME lock COMMAND test_lock $<TARGET_FILE:lock_helper>)
+add_test(NAME lock_policy COMMAND test_lock --policy)
+set_tests_properties(lock_policy PROPERTIES TIMEOUT 30 LABELS non-destructive)
+set_tests_properties(lock PROPERTIES SKIP_RETURN_CODE 77 LABELS interactive)
 set_tests_properties(lock PROPERTIES TIMEOUT 180)
 add_executable(test_lock_ui tests/test_lock_ui.c)
 target_link_libraries(test_lock_ui PRIVATE wfcore)

@@ -54,6 +54,19 @@ function Edit-WfAnchor([string]$Source,[string]$Old,[string]$New) {
   [regex]::Replace($Source,(Get-WfAnchorPattern $Old),$New.Replace('$','$$'))
 }
 
+# Only an intact, completed control receipt can establish PASS or SKIP.
+function Get-WfControlVerdict($Receipt) {
+  foreach($field in 'state','error','exit_code') {
+    if($null -eq $Receipt -or $null -eq $Receipt.PSObject.Properties[$field]) {
+      throw "Incomplete control process receipt: missing $field"
+    }
+  }
+  if($Receipt.state -ne 0 -or $Receipt.error -ne 0){return 'FAIL'}
+  if($Receipt.exit_code -eq 77){return 'SKIP'}
+  if($Receipt.exit_code -eq 0){return 'PASS'}
+  return 'FAIL'
+}
+
 # A mutant is KILLED only when the test failed with exit status 1 AND printed
 # an assertion line beginning with FAIL: a crash or a hang is not a
 # kill. The test's stdout must already be in <Directory>\test.log.

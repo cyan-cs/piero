@@ -985,16 +985,27 @@ static void the_host_looks_only_where_it_was_told(void)
 	wf_synhost_close(s);
 	wf_synhost_shutdown();
 	CHECK(NULL == GetModuleHandleW(L"piero-syntax.dll"));
-	/* the DLL changed by one byte: refused by the pin, never loaded */
+	/* Change the hash without corrupting code: a trailing byte leaves this
+	 * PE loadable. Restoring the original must not clear a cached refusal.
+	 * A pin bypass must reach an assertion, never execute damaged code. */
 	{
-		char *b;
-		size_t n;
+		size_t n = 0;
+		char *b = read_file(
+		        p, &n); /* allocates n + 1, with a zero byte */
+		HMODULE proof;
 
-		b = read_file(p, &n);
 		CHECK(b);
-		b[n / 3] = (char)(b[n / 3] ^ 0x40);
-		CHECK(write_file(p, b, n));
-		free(b);
+		if (b) {
+			CHECK(write_file(p, b, n + 1));
+			free(b);
+		}
+		proof = LoadLibraryExW(p, NULL,
+		        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
+		                LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+		CHECK(proof); /* the fixture itself is a valid executable */
+		if (proof) {
+			CHECK(FreeLibrary(proof));
+		}
 	}
 	wf_synhost_configure(d, pin);
 	{

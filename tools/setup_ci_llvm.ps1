@@ -7,7 +7,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or !$env:RUNNER_TEMP -or !$env:GITHUB_ENV -o
 $version = '23.1.3'
 $sha256 = '7e69dc07a4536b79ff24a651a2611990bf8eaab17ea560f1092707c4f31ba01d'
 $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-pc-windows-msvc.tar.zst"
-$sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
+$sevenZip = (Get-Command 7z.exe -ErrorAction Stop | Select-Object -First 1).Source
 $scratch = Join-Path $env:RUNNER_TEMP ('piero-llvm-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $scratch)
 $archive = Join-Path $scratch 'llvm.tar.zst'

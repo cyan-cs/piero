@@ -71,7 +71,7 @@ target_link_libraries(p0_env PRIVATE p0_common)
 
 add_executable(p0_conpty_host tools/p0/p0_conpty_host.c)
 
-target_link_libraries(p0_conpty_host PRIVATE p0_common p0_lab wfstorage wfcore advapi32 ole32 shell32 user32)
+target_link_libraries(p0_conpty_host PRIVATE p0_common p0_lab wfstorage wfcore advapi32 ole32 shell32 user32 userenv rstrtmgr)
 target_compile_definitions(p0_conpty_host PRIVATE
   "WF_TEST_ARCHIVE_DIR=\"${CMAKE_SOURCE_DIR}/tests/archive\"")
 add_dependencies(p0_conpty_host open_target)

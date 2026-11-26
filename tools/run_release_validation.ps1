@@ -17,7 +17,7 @@ if (!$env:VCToolsInstallDir) {
 if (!$RunId) { $RunId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '-integration-' + $Toolchain + '-' + [guid]::NewGuid().ToString('N').Substring(0,8) }
 if ($RunId -notmatch '^[A-Za-z0-9_-]{1,85}$') { throw 'Unsafe run ID' }
 $config = if ($Toolchain -eq 'clang') { 'Debug' } else { 'Release' }
-$compiler = (Get-Command $(if ($Toolchain -eq 'clang') {'clang-cl'} else {'cl'})).Source
+$compiler = (Get-Command $(if ($Toolchain -eq 'clang') {'clang-cl'} else {'cl'}) | Select-Object -First 1).Source
 $ninja = Find-WfNinja $vs
 $build = Join-Path $repo ('out/' + $RunId)
 $evidence = Join-Path $repo ('p0-results/FOUNDATION/' + $RunId)

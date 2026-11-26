@@ -3,6 +3,19 @@
 #include "../tools/p0/p0_lab.h"
 #include "wf_test.h"
 #include "wf_final_path_fault.h"
+#include "async/wf_workcore.h"
+
+static DWORD stop_wait_ms = 1000;
+
+static WfWorkerStopReport lifetime_stop(WfWorkCore *core,
+        DWORD wait_ms,
+        bool cancel_io,
+        void (*free_rest)(void *),
+        void *owner)
+{
+	(void)wait_ms;
+	return wf_wc_stop(core, stop_wait_ms, cancel_io, free_rest, owner);
+}
 
 static HANDLE entered, release_read;
 static int fail_immediately;
@@ -28,12 +41,14 @@ static BOOL blocked_read(HANDLE file,
 	return FALSE;
 }
 #define ReadFile blocked_read
+#define wf_wc_stop lifetime_stop
 #define GetFinalPathNameByHandleW fault_final_path
 #ifndef WF_PREVIEWWORKER_SOURCE
 #	define WF_PREVIEWWORKER_SOURCE "../src/preview/wf_previewworker.c"
 #endif
 #include WF_PREVIEWWORKER_SOURCE
 #undef ReadFile
+#undef wf_wc_stop
 #undef GetFinalPathNameByHandleW
 
 static void final_path_failures_are_refused(void)
@@ -76,10 +91,13 @@ int main(void)
 	release_read = CreateEventW(NULL, TRUE, FALSE, NULL);
 	CHECK(entered && release_read);
 	CHECK(GetProcessHandleCount(GetCurrentProcess(), &before));
-	for (unsigned i = 0; i < 2; i++) {
+	for (unsigned i = 0; i < 102; i++) {
 		WfPreviewWorker *worker = NULL;
 		WfPreviewPort port;
 		HANDLE completion = NULL;
+		/* First exercise the product's deadline; subsequent turns exercise
+		 * the same deferred ownership transfer with a short test deadline. */
+		stop_wait_ms = i < 2 ? 1000 : 1;
 		ResetEvent(entered);
 		ResetEvent(release_read);
 		CHECK(WF_OK ==
@@ -97,9 +115,12 @@ int main(void)
 			        ERROR_TIMEOUT == report.error &&
 			        report.deferred);
 			completion = report.completion;
-			printf("preview stop status=%s Win32=%lu deferred=%d\n",
-			        wf_status_name(report.status), report.error,
-			        report.deferred);
+			if (i < 2) {
+				printf("preview stop status=%s Win32=%lu "
+				       "deferred=%d\n",
+				        wf_status_name(report.status),
+				        report.error, report.deferred);
+			}
 			CHECK(NULL != completion);
 		}
 		worker = NULL;
@@ -107,6 +128,10 @@ int main(void)
 		CHECK(WAIT_OBJECT_0 == WaitForSingleObject(completion, 3000));
 		CloseHandle(completion);
 		CHECK(GetProcessHandleCount(GetCurrentProcess(), &after));
+		if (after != before) {
+			printf("preview deferred cycle=%u handles=%lu -> %lu\n",
+			        i, before, after);
+		}
 		CHECK(after == before);
 	}
 	{
@@ -114,6 +139,7 @@ int main(void)
 		WfPreviewResult result = {0};
 		WfPreviewPort port;
 		fail_immediately = 1;
+		stop_wait_ms = 1000;
 		CHECK(WF_OK ==
 		        wf_previewworker_start(&worker, WF_PREVIEW_BYTES, 932));
 		if (worker) {

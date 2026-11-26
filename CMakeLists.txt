@@ -72,6 +72,10 @@ if(WF_SANITIZE)
     message(FATAL_ERROR "WF_SANITIZE currently supports the x64 toolchain only")
   endif()
   set(WF_SAN_LIB_DIR "${WF_CLANG_RESOURCE_DIR}/lib/windows")
+  # Match clang-cl's sanitizer link driver. Merely naming the thunk archive
+  # drops unreferenced CRT callbacks, including DLL-detach global cleanup.
+  add_link_options(/INCLUDE:__asan_seh_interceptor
+    "/WHOLEARCHIVE:${WF_SAN_LIB_DIR}/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib")
   get_filename_component(WF_CLANG_BIN_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
   unset(WF_ASAN_DLL CACHE)
   find_file(WF_ASAN_DLL NAMES clang_rt.asan_dynamic-x86_64.dll
@@ -126,12 +130,21 @@ if(BUILD_TESTING)
   include(cmake/benchmarks.cmake)
   include(cmake/p0_tools.cmake)
   include(cmake/tests.cmake)
+  include(cmake/gate_mutant.cmake)
+  include(cmake/test_resources.cmake)
   if(WF_SANITIZE)
     # Configure-time set(ENV) does not survive into a later ctest process.
     # Apply the exact selected compiler runtime directory to test children.
-    string(REPLACE ";" "\\;" WF_TEST_RUNTIME_PATH "${WF_ASAN_DLL_DIR};$ENV{PATH}")
     get_property(WF_TEST_NAMES DIRECTORY PROPERTY TESTS)
-    set_property(TEST ${WF_TEST_NAMES} APPEND PROPERTY ENVIRONMENT
-      "PATH=${WF_TEST_RUNTIME_PATH}")
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
+      # Inherit the test host's PATH, not a snapshot of the configure shell's
+      # VS environment: importing VS again can exceed cmd.exe's line limit.
+      set_property(TEST ${WF_TEST_NAMES} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:${WF_ASAN_DLL_DIR}")
+    else()
+      string(REPLACE ";" "\\;" WF_TEST_RUNTIME_PATH "${WF_ASAN_DLL_DIR};$ENV{PATH}")
+      set_property(TEST ${WF_TEST_NAMES} APPEND PROPERTY ENVIRONMENT
+        "PATH=${WF_TEST_RUNTIME_PATH}")
+    endif()
   endif()
 endif()

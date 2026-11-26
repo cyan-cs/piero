@@ -9,8 +9,15 @@ function Get-WfSanitizer([string]$Compiler,[string]$BuildRoot){
  if($on){
   $resource=(& $Compiler '/clang:-print-resource-dir' 2>$null | Select-Object -First 1).Trim()
   $dir=Join-Path $resource 'lib/windows'
+  # VS initialization prepends its own compiler-rt DLL directory. Controls
+  # and mutants must load the runtime selected by this build, not VS's copy.
+  $runtime=Select-String -LiteralPath $cache -Pattern '^WF_ASAN_DLL:FILEPATH=(.+)$' |
+   Select-Object -First 1
+  $runtimeDir=if($runtime){Split-Path -Parent $runtime.Matches[0].Groups[1].Value}else{$dir}
+  $env:PATH=$runtimeDir+';'+$env:PATH
   $san.Compile=@('-fsanitize=address,undefined','-fno-sanitize-recover=undefined')
-  $san.Link=@("/LIBPATH:$dir",'/OPT:NOICF','/INCREMENTAL:NO','clang_rt.asan_dynamic-x86_64.lib',
+  $san.Link=@("/LIBPATH:$dir",'/OPT:NOICF','/INCREMENTAL:NO','/INCLUDE:__asan_seh_interceptor',
+   "/WHOLEARCHIVE:$dir/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",'clang_rt.asan_dynamic-x86_64.lib',
    'clang_rt.asan_dynamic_runtime_thunk-x86_64.lib','clang_rt.ubsan_standalone-x86_64.lib')
   # Instrumented code runs several times slower; a mutant that is a deliberate slowdown needs the same
   # factor before it can be called hung. The hang limit of a normal build is not touched.

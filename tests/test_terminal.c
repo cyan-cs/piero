@@ -544,7 +544,11 @@ int main(void)
 	GetTempPathW(MAX_PATH, temp);
 	swprintf(tool_dir, MAX_PATH + 16, L"%lswf-term-tools-%lu", temp,
 	        GetCurrentProcessId());
-	CHECK(CreateDirectoryW(tool_dir, NULL));
+	BOOL directory_created = CreateDirectoryW(tool_dir, NULL);
+	CHECK(directory_created);
+	if (!directory_created) {
+		return TEST_RESULT();
+	}
 	{
 		wchar_t from[MAX_PATH + 40], to[MAX_PATH + 40];
 
@@ -553,6 +557,23 @@ int main(void)
 		        tool_dir);
 		CHECK(CopyFileW(from, to, FALSE));
 		swprintf(probe_out, MAX_PATH + 40, L"%ls\\probe.out", tool_dir);
+		/* The real probe inherits a deliberately isolated PATH. Give its
+		 * instrumented copy the same runtime already loaded by this test. */
+		HMODULE runtime =
+		        GetModuleHandleW(L"clang_rt.asan_dynamic-x86_64.dll");
+		if (runtime) {
+			wchar_t runtime_path[32768];
+			DWORD n = GetModuleFileNameW(
+			        runtime, runtime_path, 32768);
+			CHECK(n && n < 32768);
+			if (n && n < 32768) {
+				swprintf(to, MAX_PATH + 40,
+				        L"%ls\\clang_rt.asan_dynamic-x86_64."
+				        L"dll",
+				        tool_dir);
+				CHECK(CopyFileW(runtime_path, to, TRUE));
+			}
+		}
 	}
 	a_folder_of_a_local_drive_is_accepted();
 	anything_else_is_refused();
@@ -569,8 +590,9 @@ int main(void)
 	SetEnvironmentVariableW(L"PATH", path_was);
 	{
 		wchar_t file[MAX_PATH + 40];
-		static const wchar_t *const made[] = {
-		        L"wt.exe", L"terminal_probe.exe", L"probe.out"};
+		static const wchar_t *const made[] = {L"wt.exe",
+		        L"terminal_probe.exe", L"probe.out",
+		        L"clang_rt.asan_dynamic-x86_64.dll"};
 
 		for (size_t i = 0; i < sizeof made / sizeof *made; i++) {
 			swprintf(file, MAX_PATH + 40, L"%ls\\%ls", tool_dir,

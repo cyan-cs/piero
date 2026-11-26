@@ -8,6 +8,7 @@
  */
 #include <windows.h>
 #include <winioctl.h>
+#include <bcrypt.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,8 +19,10 @@
 #include "search/wf_searchworker.h"
 #include "xfer/wf_xfer.h"
 #include "wf_test.h"
+#include "../tools/p0/p0_area.h"
 
 static wchar_t root[MAX_PATH + 40];
+static P0Area *area;
 static int skips;
 
 static void skip(const char *what)
@@ -46,19 +49,21 @@ static wchar_t *at(const wchar_t *rel)
 
 static void mkdir_at(const wchar_t *rel)
 {
-	CreateDirectoryW(at(rel), NULL);
+	CHECK(p0_area_mkdir(area, rel));
 }
 
 static void file_at(const wchar_t *rel, const char *text)
 {
-	HANDLE h = CreateFileW(at(rel), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+	HANDLE h = CreateFileW(at(rel), GENERIC_WRITE, 0, NULL, CREATE_NEW,
 	        FILE_ATTRIBUTE_NORMAL, NULL);
-	DWORD n;
+	DWORD n = 0;
 
 	CHECK(INVALID_HANDLE_VALUE != h);
 	if (INVALID_HANDLE_VALUE != h) {
-		WriteFile(h, text, (DWORD)strlen(text), &n, NULL);
+		CHECK(WriteFile(h, text, (DWORD)strlen(text), &n, NULL));
+		CHECK(n == strlen(text));
 		CloseHandle(h);
+		CHECK(p0_area_track(area, rel, 0));
 	}
 }
 
@@ -322,7 +327,7 @@ static void hidden_entries_and_a_junction_not_followed(void)
 		swprintf(sub, MAX_PATH + 12, L"\\??\\%ls", target);
 		sb = (USHORT)(wcslen(sub) * 2);
 		pb = (USHORT)(wcslen(target) * 2);
-		CreateDirectoryW(link, NULL);
+		mkdir_at(L"t3\\link");
 		h = CreateFileW(link, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
 		        FILE_FLAG_BACKUP_SEMANTICS |
 		                FILE_FLAG_OPEN_REPARSE_POINT,
@@ -379,7 +384,7 @@ static void hidden_entries_and_a_junction_not_followed(void)
 		}
 	}
 	/* the junction is removed as a link, not through it */
-	RemoveDirectoryW(at(L"t3\\link"));
+	CHECK(p0_area_remove(area, L"t3\\link"));
 }
 
 typedef struct
@@ -388,6 +393,7 @@ typedef struct
 	unsigned sleep_ms;
 	unsigned lists;
 	bool unreadable_sub;
+	HANDLE entered, release;
 } Fake;
 
 static Fake fake;
@@ -396,10 +402,14 @@ static WfStatus fake_list(
         const wchar_t *dir, bool (*cancel)(void *), void *cctx, WfDir **out)
 {
 	WfDir *d;
+	unsigned entries = fake.entries;
+	HANDLE entered = fake.entered, release = fake.release;
 
-	(void)cancel;
-	(void)cctx;
 	InterlockedIncrement((volatile LONG *)&fake.lists);
+	if (entered && release) {
+		SetEvent(entered);
+		CHECK(WAIT_OBJECT_0 == WaitForSingleObject(release, 5000));
+	}
 	if (fake.sleep_ms) {
 		Sleep(fake.sleep_ms);
 	}
@@ -409,9 +419,13 @@ static WfStatus fake_list(
 	d = wf_dir_new();
 	CHECK(NULL != d);
 	if (!wcscmp(dir, L"F")) {
-		for (unsigned i = 0; i < fake.entries; i++) {
+		for (unsigned i = 0; i < entries; i++) {
 			wchar_t name[32];
 
+			if (cancel && cancel(cctx)) {
+				wf_dir_free(d);
+				return WF_E_CANCELLED;
+			}
 			swprintf(name, 32, L"m%u.txt", i);
 			CHECK(WF_OK ==
 			        wf_dir_add(d, name, wcslen(name), 0, 1, 1));
@@ -530,6 +544,52 @@ static void unreadable_folders_are_counted_and_the_rest_is_searched(void)
 	}
 }
 
+static HANDLE cancel_entered, cancel_release, cancel_observed;
+
+static WfStatus cancellation_list(
+        const wchar_t *dir, bool (*cancel)(void *), void *ctx, WfDir **out)
+{
+	(void)dir;
+	*out = NULL;
+	SetEvent(cancel_entered);
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(cancel_release, 5000));
+	CHECK(cancel && cancel(ctx));
+	SetEvent(cancel_observed);
+	return WF_E_CANCELLED;
+}
+
+static void cancellation_reaches_an_inflight_enumerator(void)
+{
+	WfSearchWorker *w = NULL;
+	WfSearchPort p;
+	WfQuery q;
+	WfFileId none = {0};
+	WfWorkerStopReport rep;
+
+	cancel_entered = CreateEventW(NULL, TRUE, FALSE, NULL);
+	cancel_release = CreateEventW(NULL, TRUE, FALSE, NULL);
+	cancel_observed = CreateEventW(NULL, TRUE, FALSE, NULL);
+	CHECK(cancel_entered && cancel_release && cancel_observed);
+	CHECK(WF_OK == wf_searchworker_start(&w, cancellation_list));
+	p = wf_searchworker_port(w);
+	CHECK(query(L"m", &q));
+	CHECK(WF_OK == p.start(p.ctx, 1, L"F", none, &q, false));
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(cancel_entered, 5000));
+	p.cancel(p.ctx);
+	SetEvent(cancel_release);
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(cancel_observed, 5000));
+	rep = wf_searchworker_stop(w);
+	CHECK(WF_OK == rep.status);
+	if (rep.completion) {
+		CHECK(WAIT_OBJECT_0 ==
+		        WaitForSingleObject(rep.completion, 5000));
+		CloseHandle(rep.completion);
+	}
+	CloseHandle(cancel_observed);
+	CloseHandle(cancel_release);
+	CloseHandle(cancel_entered);
+}
+
 static void a_newer_request_ends_the_older_and_cancel_delivers_nothing(void)
 {
 	WfSearchWorker *w = NULL;
@@ -541,13 +601,17 @@ static void a_newer_request_ends_the_older_and_cancel_delivers_nothing(void)
 
 	memset(&fake, 0, sizeof fake);
 	fake.entries = 200000; /* a long walk for the first request */
+	fake.entered = CreateEventW(NULL, TRUE, FALSE, NULL);
+	fake.release = CreateEventW(NULL, TRUE, FALSE, NULL);
+	CHECK(fake.entered && fake.release);
 	CHECK(WF_OK == wf_searchworker_start(&w, fake_list));
 	p = wf_searchworker_port(w);
 	CHECK(query(L"m", &q));
 	CHECK(WF_OK == p.start(p.ctx, 1, L"F", none, &q, false));
-	Sleep(30);
+	CHECK(WAIT_OBJECT_0 == WaitForSingleObject(fake.entered, 5000));
 	fake.entries = 3;
 	CHECK(WF_OK == p.start(p.ctx, 2, L"F", none, &q, false));
+	SetEvent(fake.release);
 	drain(w, &g, 2, 30000);
 	CHECK(g.done && 3 == g.n && !g.other_gen); /* nothing of request 1 */
 	got_free(&g);
@@ -575,6 +639,8 @@ static void a_newer_request_ends_the_older_and_cancel_delivers_nothing(void)
 			CloseHandle(rep.completion);
 		}
 	}
+	CloseHandle(fake.release);
+	CloseHandle(fake.entered);
 }
 
 static void stopping_in_the_middle_returns_within_the_wait(void)
@@ -610,7 +676,7 @@ static void bytes_at(const wchar_t *rel, size_t n, char fill, char last)
 {
 	char *buf = malloc(n);
 	HANDLE h;
-	DWORD done;
+	DWORD done = 0;
 
 	CHECK(NULL != buf);
 	if (!buf) {
@@ -618,12 +684,14 @@ static void bytes_at(const wchar_t *rel, size_t n, char fill, char last)
 	}
 	memset(buf, fill, n);
 	buf[n - 1] = last;
-	h = CreateFileW(at(rel), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+	h = CreateFileW(at(rel), GENERIC_WRITE, 0, NULL, CREATE_NEW,
 	        FILE_ATTRIBUTE_NORMAL, NULL);
 	CHECK(INVALID_HANDLE_VALUE != h);
 	if (INVALID_HANDLE_VALUE != h) {
-		WriteFile(h, buf, (DWORD)n, &done, NULL);
+		CHECK(WriteFile(h, buf, (DWORD)n, &done, NULL));
+		CHECK(done == n);
 		CloseHandle(h);
+		CHECK(p0_area_track(area, rel, 0));
 	}
 	free(buf);
 }
@@ -980,30 +1048,49 @@ static void a_group_over_the_limit_is_cut_before_it_is_made(void)
 
 static void cleanup(void)
 {
-	/* the tree is small folders; remove it depth first with the shell-free walk */
-	wchar_t cmd[MAX_PATH * 2];
-	STARTUPINFOW si;
-	PROCESS_INFORMATION pi;
-
-	memset(&si, 0, sizeof si);
-	si.cb = sizeof si;
-	swprintf(cmd, MAX_PATH * 2, L"cmd.exe /c rmdir /s /q \"%ls\"", root);
-	if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL,
-	            NULL, &si, &pi)) {
-		WaitForSingleObject(pi.hProcess, 30000);
-		CloseHandle(pi.hThread);
-		CloseHandle(pi.hProcess);
+	wchar_t report[2048];
+	int left;
+	/* Delete only recorded objects after the area's ownership proofs. */
+	left = p0_area_destroy(area, report, 2048);
+	if (left) {
+		fwprintf(stderr, L"Search fixture cleanup: %ls\n", report);
 	}
+	CHECK(0 == left);
 }
 
 int main(void)
 {
-	wchar_t tmp[MAX_PATH];
+	wchar_t temp[MAX_PATH];
+	unsigned char nonce[8];
+	char id[96];
+	DWORD units = GetTempPathW(MAX_PATH, temp);
 
-	GetTempPathW(MAX_PATH, tmp);
-	swprintf(root, MAX_PATH + 40, L"%lssearch_%lu", tmp,
-	        (unsigned long)GetCurrentProcessId());
-	CreateDirectoryW(root, NULL);
+	/* Mutants stop at their first assertion and retain their fixtures. A PID
+	 * can be reused, so never adopt an old search_<pid> directory. */
+	if (!units || units >= MAX_PATH ||
+	        BCryptGenRandom(NULL, nonce, sizeof nonce,
+	                BCRYPT_USE_SYSTEM_PREFERRED_RNG)) {
+		CHECK_FAIL("search fixture base and nonce");
+		return 1;
+	}
+	snprintf(id, sizeof id, "search-%lu-%02x%02x%02x%02x%02x%02x%02x%02x",
+	        (unsigned long)GetCurrentProcessId(), nonce[0], nonce[1],
+	        nonce[2], nonce[3], nonce[4], nonce[5], nonce[6], nonce[7]);
+	/* P0Area appends its separator, including in extended paths. */
+	if (temp[units - 1] == L'\\') {
+		temp[units - 1] = L'\0';
+	}
+	area = p0_area_create(temp, id);
+	if (!area) {
+		CHECK_FAIL("fresh owned search fixture");
+		return 1;
+	}
+	if (wcslen(p0_area_root(area)) >= MAX_PATH - 40) {
+		CHECK_FAIL("search fixture path fits the junction buffers");
+		p0_area_forget(area);
+		return 1;
+	}
+	wcscpy_s(root, sizeof root / sizeof *root, p0_area_root(area));
 
 	hits_and_where_they_are();
 	many_hits_come_in_batches_and_in_order_of_distance();
@@ -1013,6 +1100,7 @@ int main(void)
 	a_slow_screen_stops_the_walk_and_not_the_memory();
 	unreadable_folders_are_counted_and_the_rest_is_searched();
 	a_newer_request_ends_the_older_and_cancel_delivers_nothing();
+	cancellation_reaches_an_inflight_enumerator();
 	stopping_in_the_middle_returns_within_the_wait();
 	duplicates_are_found_by_size_then_prefix_then_the_whole_file();
 	links_cloud_and_empty_files_are_not_compared();

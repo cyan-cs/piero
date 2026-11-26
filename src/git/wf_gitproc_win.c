@@ -256,16 +256,48 @@ void wf_gitproc_result_free(WfGitRunResult *res)
 	}
 }
 
+/* Job notifications are hints; accounting is the authoritative condition.
+ * The completion port avoids spinning while owned descendants exit. */
+static bool job_finished(HANDLE job, HANDLE port, DWORD timeout)
+{
+	ULONGLONG deadline = GetTickCount64() + timeout;
+
+	for (;;) {
+		JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting;
+		DWORD message;
+		ULONG_PTR key;
+		LPOVERLAPPED overlapped;
+		ULONGLONG now;
+
+		if (!QueryInformationJobObject(job,
+		            JobObjectBasicAccountingInformation, &accounting,
+		            sizeof accounting, NULL)) {
+			return false;
+		}
+		if (!accounting.ActiveProcesses) {
+			return true;
+		}
+		now = GetTickCount64();
+		if (now >= deadline) {
+			SetLastError(ERROR_TIMEOUT);
+			return false;
+		}
+		GetQueuedCompletionStatus(port, &message, &key, &overlapped,
+		        (DWORD)(deadline - now > 100 ? 100 : deadline - now));
+	}
+}
+
 WfStatus wf_gitproc_run(const WfGitRun *run, WfGitRunResult *res)
 {
 	Pipe out = {0}, err = {0};
 	HANDLE in_r = INVALID_HANDLE_VALUE, out_w = INVALID_HANDLE_VALUE,
-	       err_w = INVALID_HANDLE_VALUE, job = NULL;
+	       err_w = INVALID_HANDLE_VALUE, job = NULL, completion = NULL;
 	HANDLE inherit[3];
 	PROCESS_INFORMATION pi;
 	STARTUPINFOEXW si;
 	SIZE_T attr_size = 0;
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit;
+	JOBOBJECT_ASSOCIATE_COMPLETION_PORT association;
 	wchar_t *line = NULL, *env = NULL;
 	uint8_t *ebuf = NULL;
 	size_t ecap = 0, en = 0, ocap = 0;
@@ -301,6 +333,16 @@ WfStatus wf_gitproc_run(const WfGitRun *run, WfGitRunResult *res)
 	        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 	if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
 	            &limit, sizeof limit)) {
+		res->os_error = GetLastError();
+		goto done;
+	}
+	completion = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+	association.CompletionKey = job;
+	association.CompletionPort = completion;
+	if (!completion ||
+	        !SetInformationJobObject(job,
+	                JobObjectAssociateCompletionPortInformation,
+	                &association, sizeof association)) {
 		res->os_error = GetLastError();
 		goto done;
 	}
@@ -345,10 +387,14 @@ WfStatus wf_gitproc_run(const WfGitRun *run, WfGitRunResult *res)
 	if (!AssignProcessToJobObject(job, pi.hProcess)) {
 		res->os_error = GetLastError();
 		TerminateProcess(pi.hProcess, 1);
+		WaitForSingleObject(pi.hProcess, 2000);
 		goto done;
 	}
 	started = true;
-	ResumeThread(pi.hThread);
+	if ((DWORD)-1 == ResumeThread(pi.hThread)) {
+		res->os_error = GetLastError();
+		goto done;
+	}
 	/* the child's ends belong to the child now */
 	CloseHandle(in_r);
 	in_r = INVALID_HANDLE_VALUE;
@@ -406,8 +452,12 @@ WfStatus wf_gitproc_run(const WfGitRun *run, WfGitRunResult *res)
 	if (WF_OK == st) {
 		DWORD code = 0;
 
-		GetExitCodeProcess(pi.hProcess, &code);
-		res->exit_code = (int)code;
+		if (!GetExitCodeProcess(pi.hProcess, &code)) {
+			res->os_error = GetLastError();
+			st = WF_E_OS;
+		} else {
+			res->exit_code = (int)code;
+		}
 	}
 	res->err_dropped = err_dropped;
 	if (en) {
@@ -427,8 +477,27 @@ done:
 		DeleteProcThreadAttributeList(si.lpAttributeList);
 		HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
 	}
-	if (started && st != WF_OK && !killed) {
-		TerminateJobObject(job, 1);
+	if (started) {
+		/* KILL_ON_JOB_CLOSE was already the ownership contract. Request
+		 * it explicitly and observe completion before reporting success. */
+		BOOL ended = TerminateJobObject(job, 1);
+		DWORD cleanup_error = ended ? 0 : GetLastError();
+
+		if (!job_finished(job, completion, 2000) && !cleanup_error) {
+			cleanup_error = GetLastError();
+		}
+		if (WAIT_OBJECT_0 != WaitForSingleObject(pi.hProcess, 2000) &&
+		        !cleanup_error) {
+			cleanup_error = ERROR_TIMEOUT;
+		}
+		if (cleanup_error) {
+			if (!res->os_error) {
+				res->os_error = cleanup_error;
+			}
+			if (WF_OK == st) {
+				st = WF_E_OS;
+			}
+		}
 	}
 	if (pi.hThread) {
 		CloseHandle(pi.hThread);
@@ -438,6 +507,9 @@ done:
 	}
 	if (job) {
 		CloseHandle(job); /* KILL_ON_JOB_CLOSE ends anything left */
+	}
+	if (completion) {
+		CloseHandle(completion);
 	}
 	if (INVALID_HANDLE_VALUE != in_r && in_r) {
 		CloseHandle(in_r);
