@@ -1,0 +1,20 @@
+name: Cached verified LLVM
+description: Restore the release archive, verify it and select the toolchain
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: archive
+      with:
+        path: ${{ runner.temp }}/piero-llvm-download
+        key: llvm-windows-x64-${{ hashFiles('tools/setup_ci_llvm.ps1', 'tools/wf_download.ps1') }}
+    - shell: powershell
+      env:
+        PIERO_LLVM_DOWNLOAD_DIR: ${{ runner.temp }}/piero-llvm-download
+      run: ./tools/setup_ci_llvm.ps1
+    # Save before tests, so a failing qualification run still warms this cache.
+    - uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      if: steps.archive.outputs.cache-hit != 'true'
+      with:
+        path: ${{ runner.temp }}/piero-llvm-download
+        key: ${{ steps.archive.outputs.cache-primary-key }}

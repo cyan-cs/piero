@@ -1,5 +1,6 @@
 # CI-only tool provisioning. Product builds gain no runtime dependency.
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'wf_download.ps1')
 if ($env:GITHUB_ACTIONS -ne 'true' -or !$env:RUNNER_TEMP -or !$env:GITHUB_ENV -or !$env:GITHUB_PATH) {
     throw 'Run this provisioning script only in a GitHub Actions runner'
 }
@@ -10,16 +11,16 @@ $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/
 $sevenZip = (Get-Command 7z.exe -ErrorAction Stop | Select-Object -First 1).Source
 $scratch = Join-Path $env:RUNNER_TEMP ('piero-llvm-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $scratch)
-$archive = Join-Path $scratch 'llvm.tar.zst'
-Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $archive
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash -ne $sha256) {
-    throw 'LLVM archive checksum mismatch; refusing extraction'
-}
+$download = if ($env:PIERO_LLVM_DOWNLOAD_DIR) { $env:PIERO_LLVM_DOWNLOAD_DIR } else { $scratch }
+[void](New-Item -ItemType Directory -Path $download -Force)
+$archive = Join-Path $download "llvm-$version-$sha256.tar.zst"
+$archive = Get-WfVerifiedDownload $url $archive $sha256
 & $sevenZip x -y "-o$scratch" $archive
 if ($LASTEXITCODE) { throw 'LLVM zstd extraction failed' }
-$tar = Join-Path $scratch 'llvm.tar'
+$tar = Join-Path $scratch ([IO.Path]::GetFileNameWithoutExtension($archive))
 if (!(Test-Path -LiteralPath $tar -PathType Leaf)) { throw 'Expected LLVM tar archive missing' }
-$unpacked = Join-Path $scratch 'unpacked'
+# Stable compiler paths let compiler-cache entries survive subsequent jobs.
+$unpacked = Join-Path $env:RUNNER_TEMP "piero-llvm-$version"
 & $sevenZip x -y "-o$unpacked" $tar
 if ($LASTEXITCODE) { throw 'LLVM tar extraction failed' }
 $compilers = @(Get-ChildItem -LiteralPath $unpacked -Recurse -File -Filter clang-cl.exe)

@@ -25,10 +25,14 @@ are retained; checkout includes the later authentication-cleanup patch.
 | actions/checkout | v4.3.1 | `34e114876b0b11c390a56381ad16ebd13914f8d5` |
 | actions/setup-python | v5.6.0 | `a26af69be951a213d495a4c3e4e4022e16d87065` |
 | actions/upload-artifact | v4.6.2 | `ea165f8d65b6e75b540449e92b4886f43607fa02` |
+| actions/cache (restore/save) | v5.0.3 | `cdf6c1fa76f9f475f3d7449005a359c84ca0f306` |
+| Mozilla-Actions/sccache-action | v0.0.11 | `fc920bf0ec8de6ee65d409111f7ec508035751ba` |
 
 Sources: [checkout release](https://github.com/actions/checkout/releases/tag/v4.3.1),
 [Python release](https://github.com/actions/setup-python/releases/tag/v5.6.0),
 [artifact release](https://github.com/actions/upload-artifact/releases/tag/v4.6.2).
+Cache sources: [cache release](https://github.com/actions/cache/releases/tag/v5.0.3),
+[sccache action release](https://github.com/Mozilla-Actions/sccache-action/releases/tag/v0.0.11).
 All checkouts set `persist-credentials: false`. Only documentation/history scanning
 and formatting fetch full history with `fetch-depth: 0`; compiler/sanitizer/analysis
 jobs use the default shallow checkout. No extra token permission is needed for
@@ -61,6 +65,29 @@ history scan. Historical findings identify objects; matched values are not print
 Do not rewrite project history as part of routine validation.
 
 ## Execution and artifacts
+
+The local `setup-ci-llvm` action shares the compressed LLVM release archive
+between jobs and runs. The key hashes the provisioning/download helpers; every
+restore still checks the pinned SHA-256 before extraction and checks tool
+versions afterwards. Only the approximately 264 MiB archive is cached, keeping
+the 4 GiB installation out of cache storage. It is saved immediately after
+verification, even if later tests fail. Extraction remains per job, at a stable
+compiler path so compiler-cache entries can be reused.
+
+The compiler matrix and sanitizer jobs use sccache v0.16.0 with its GitHub Actions storage backend via
+`-CompilerCache`. CMake uses the compiler launcher and embedded `/Z7` Debug
+information instead of a shared compiler PDB. Release mutation builds compile
+one source per cached invocation, including their unchanged test drivers, then
+link a fresh executable. Other direct-compiler mutation helpers retain their
+existing build paths. The sccache action reports hits/misses in its post step.
+See the [sccache usage guide](https://github.com/mozilla/sccache#usage).
+
+Cached compilation never reuses a control/mutant verdict, CTest report or test
+fixture. All tests still execute on every run. Cold caches still compile; the
+actual warm-run saving must be measured in Actions. Long E2E and mutation
+execution times remain, so caching alone does not promise a short full suite.
+Local validation defaults to compilation without a cache; `-CompilerCache`
+requires an installed sccache and also enables it for CTest's mutation builds.
 
 Push validation stays enabled for development branches as well as the default
 branch. Automatic runs supersede the same event/ref; PR refs stay separate.

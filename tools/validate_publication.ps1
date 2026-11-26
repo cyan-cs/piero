@@ -4,6 +4,7 @@ param(
   [ValidateSet('Debug','Release')][string]$Configuration = 'Release',
   [switch]$Sanitize,
   [switch]$Analyze,
+  [switch]$CompilerCache,
   [switch]$BuildOnly,
   [switch]$SafeOnly,
   [string]$JUnit,
@@ -42,8 +43,16 @@ if (Test-Path -LiteralPath $cachePath) {
   }
 }
 if ($Sanitize -and $Toolchain -ne 'clang') { throw 'Sanitizers require clang-cl' }
+$launcher = ''
+if ($CompilerCache) {
+  $launcher = (Get-Command sccache -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+  $env:PIERO_COMPILER_CACHE = $launcher
+} else {
+  Remove-Item Env:\PIERO_COMPILER_CACHE -ErrorAction SilentlyContinue
+}
 $args0 = @('-S','.', '-B',$BuildDirectory, '-G','Ninja',
   "-DCMAKE_MAKE_PROGRAM=$ninja", "-DCMAKE_C_COMPILER=$compiler",
+  "-DCMAKE_C_COMPILER_LAUNCHER=$launcher",
   "-DCMAKE_BUILD_TYPE=$Configuration", "-DWF_SANITIZE=$($Sanitize.IsPresent.ToString().ToUpper())",
   "-DWF_ANALYZE=$($Analyze.IsPresent.ToString().ToUpper())")
 & cmake @args0

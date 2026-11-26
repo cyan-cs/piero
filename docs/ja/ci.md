@@ -24,10 +24,14 @@
 | actions/checkout | v4.3.1 | `34e114876b0b11c390a56381ad16ebd13914f8d5` |
 | actions/setup-python | v5.6.0 | `a26af69be951a213d495a4c3e4e4022e16d87065` |
 | actions/upload-artifact | v4.6.2 | `ea165f8d65b6e75b540449e92b4886f43607fa02` |
+| actions/cache (restore/save) | v5.0.3 | `cdf6c1fa76f9f475f3d7449005a359c84ca0f306` |
+| Mozilla-Actions/sccache-action | v0.0.11 | `fc920bf0ec8de6ee65d409111f7ec508035751ba` |
 
 根拠：[checkoutのリリース](https://github.com/actions/checkout/releases/tag/v4.3.1)、
 [Pythonのリリース](https://github.com/actions/setup-python/releases/tag/v5.6.0)、
 [artifactのリリース](https://github.com/actions/upload-artifact/releases/tag/v4.6.2)。
+キャッシュの根拠：[cacheのリリース](https://github.com/actions/cache/releases/tag/v5.0.3)、
+[sccache actionのリリース](https://github.com/Mozilla-Actions/sccache-action/releases/tag/v0.0.11)。
 すべてのcheckoutで`persist-credentials: false`を指定します。資料・履歴の検査と整形のジョブだけが
 `fetch-depth: 0`で全履歴を取得し、コンパイラ、Sanitizer、解析のジョブは、既定の浅いcheckoutを使います。
 テストのArtifactを保存するサービスに、追加のトークン権限は要りません。PRの作成と承認は行いません。
@@ -60,6 +64,26 @@ source、tests、toolsの下にある、最終状態の通常のCファイルと
 通常の検証作業の一環としてプロジェクトの履歴を書き換えないでください。
 
 ## 実行とArtifact
+
+ローカルactionの`setup-ci-llvm`で、圧縮済みLLVMアーカイブをジョブ間・実行間で共有します。
+キーには導入・ダウンロードhelperのハッシュを使い、復元後も固定SHA-256を検証してから展開し、
+ツールのバージョンも確認します。約264 MiBのアーカイブだけを保存し、4 GiBの展開先は
+保存しません。検証直後に保存するため、後続テストが失敗しても次回に利用できます。
+展開はジョブごとに行い、コンパイラのパスは固定してコンパイルキャッシュを再利用します。
+
+Clang/MSVCのDebug・ReleaseとSanitizerのジョブは、`-CompilerCache`で
+sccache v0.16.0のGitHub Actions backendを使います。
+CMakeのcompiler launcherを設定し、Debug情報は共有PDBからオブジェクト内の`/Z7`へ変えます。
+release mutationは変更のないテストドライバーも含めてソースごとにコンパイルをキャッシュし、
+毎回リンクします。それ以外のコンパイラを直接呼ぶmutation helperは従来のビルド経路を使います。
+sccache actionの終了処理がヒット・ミス統計を表示します。
+根拠：[sccacheの使用方法](https://github.com/mozilla/sccache#usage)。
+
+control・mutantの判定、CTest結果、fixtureは再利用せず、テストは毎回実行します。
+キャッシュが空ならコンパイルし、実際の短縮時間はActionsで計測します。
+長いE2Eやmutationの実行時間は残るため、キャッシュだけで全試験が短時間になるとは限りません。
+ローカル検証の既定値はキャッシュなしです。`-CompilerCache`にはsccacheのインストールが必要で、
+CTestから実行するmutationにも同じ設定を渡します。
 
 pushの検証は、既定のブランチだけでなく開発ブランチでも続けます。自動実行は、同じイベントと同じrefの
 古い実行だけを置き換え、PRのrefは分けます。手動実行には一意のrun識別子を使い、自動のpushや

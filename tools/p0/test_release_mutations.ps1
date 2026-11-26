@@ -9,6 +9,7 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot '../wf_toolchain.ps1')
 . (Join-Path $PSScriptRoot 'wf_mutation_text.ps1')
 . (Join-Path $PSScriptRoot 'wf_sanitizer.ps1')
+. (Join-Path $PSScriptRoot 'wf_compile.ps1')
 Initialize-WfToolchain
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $buildRoot=(Resolve-Path -LiteralPath $Build).Path
@@ -1006,7 +1007,7 @@ foreach($m in $mutants){
  $arguments=Add-WfSanitizerArgs $arguments $san
  $saved=$ErrorActionPreference
  $compileClock=[Diagnostics.Stopwatch]::StartNew()
- try{$ErrorActionPreference='Continue';& $Compiler @arguments *> (Join-Path $dir 'build.log');$compileExit=$LASTEXITCODE}
+ try{$ErrorActionPreference='Continue';$compileExit=Invoke-WfMutationBuild $Compiler $arguments $dir}
  finally{$ErrorActionPreference=$saved}
  $compileClock.Stop()
  if($compileExit -ne 0){throw "Mutant compile failed, never a kill: $($m.name); see $(Join-Path $dir 'build.log')"}

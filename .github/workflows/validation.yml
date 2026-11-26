@@ -35,6 +35,11 @@ jobs:
         run: python tools/ci_changes.py --whitespace
   windows:
     runs-on: windows-2025
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      SCCACHE_GHA_VERSION: piero-c-v1
+      SCCACHE_IDLE_TIMEOUT: '7200'
+      SCCACHE_IGNORE_SERVER_IO_ERROR: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -46,11 +51,14 @@ jobs:
           persist-credentials: false
       - name: Select verified LLVM toolchain
         if: matrix.toolchain == 'clang'
-        shell: powershell
-        run: ./tools/setup_ci_llvm.ps1
+        uses: ./.github/actions/setup-ci-llvm
+      - name: Set up compiler cache
+        uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: v0.16.0
       - name: Build and run CTest (known qualification failures remain failures)
         shell: powershell
-        run: ./tools/validate_publication.ps1 -Toolchain ${{ matrix.toolchain }} -Configuration ${{ matrix.configuration }} -BuildDirectory out/ci -JUnit out/ci/ctest.xml
+        run: ./tools/validate_publication.ps1 -Toolchain ${{ matrix.toolchain }} -Configuration ${{ matrix.configuration }} -CompilerCache -BuildDirectory out/ci -JUnit out/ci/ctest.xml
       - name: Collect test verdicts without raw diagnostic contents
         if: always()
         shell: powershell
@@ -66,16 +74,24 @@ jobs:
           retention-days: 7
   sanitizer:
     runs-on: windows-2025
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      SCCACHE_GHA_VERSION: piero-c-v1
+      SCCACHE_IDLE_TIMEOUT: '7200'
+      SCCACHE_IGNORE_SERVER_IO_ERROR: '1'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
       - name: Select verified LLVM toolchain
-        shell: powershell
-        run: ./tools/setup_ci_llvm.ps1
+        uses: ./.github/actions/setup-ci-llvm
+      - name: Set up compiler cache
+        uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: v0.16.0
       - name: Instrumented development build and CTest
         shell: powershell
-        run: ./tools/validate_publication.ps1 -Toolchain clang -Configuration Debug -Sanitize -BuildDirectory out/san -JUnit out/san/ctest.xml
+        run: ./tools/validate_publication.ps1 -Toolchain clang -Configuration Debug -Sanitize -CompilerCache -BuildDirectory out/san -JUnit out/san/ctest.xml
       - name: Collect sanitizer verdicts without raw diagnostic contents
         if: always()
         shell: powershell
@@ -97,8 +113,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Select verified LLVM formatter
-        shell: powershell
-        run: ./tools/setup_ci_llvm.ps1
+        uses: ./.github/actions/setup-ci-llvm
       - name: Check changed first-party C files
         shell: powershell
         run: python tools/ci_changes.py --format

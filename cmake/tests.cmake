@@ -600,6 +600,8 @@ set_tests_properties(syntax_codegen PROPERTIES LABELS non-destructive TIMEOUT 30
 add_test(NAME mutation_tools COMMAND "${Python3_EXECUTABLE}"
   "${PROJECT_SOURCE_DIR}/tests/test_mutation_tools.py")
 set_tests_properties(mutation_tools PROPERTIES LABELS non-destructive TIMEOUT 30)
+add_test(NAME ci_cache COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_ci_cache.py")
+set_tests_properties(ci_cache PROPERTIES LABELS non-destructive TIMEOUT 30)
 add_test(NAME build_version COMMAND "${Python3_EXECUTABLE}"
   "${PROJECT_SOURCE_DIR}/tests/test_build_version.py")
 set_tests_properties(build_version PROPERTIES LABELS non-destructive TIMEOUT 30)
