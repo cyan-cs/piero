@@ -1343,7 +1343,7 @@ static bool gate_is_private(const GatePrivacy *p)
 /* A folder made the way the program makes its own: owner only. */
 static bool gate_mkdir_private(Gate *g, const wchar_t *rel)
 {
-	wchar_t path[1100], sddl[200], *sid = NULL;
+	wchar_t path[1100], sddl[512], *sid = NULL;
 	HANDLE token = NULL;
 	TOKEN_USER *user = NULL;
 	DWORD bytes = 0;
@@ -1359,10 +1359,23 @@ static bool gate_mkdir_private(Gate *g, const wchar_t *rel)
 	if (user &&
 	        GetTokenInformation(token, TokenUser, user, bytes, &bytes) &&
 	        ConvertSidToStringSidW(user->User.Sid, &sid)) {
-		swprintf(sddl, 200, L"D:P(A;;FA;;;%ls)", sid);
+		/* Elevated TokenOwner may be Administrators. Match the product's
+		 * explicit user owner as well as its protected, user-only DACL. */
+		swprintf(sddl, 512, L"O:%lsD:P(A;;FA;;;%ls)", sid, sid);
 		if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl,
 		            SDDL_REVISION_1, &sa.lpSecurityDescriptor, NULL)) {
-			ok = 0 != CreateDirectoryW(path, &sa);
+			PSID owner = NULL;
+			BOOL defaulted = TRUE;
+			bool owned = GetSecurityDescriptorOwner(
+			                     sa.lpSecurityDescriptor, &owner,
+			                     &defaulted) &&
+			        owner && !defaulted &&
+			        EqualSid(owner, user->User.Sid);
+
+			gate_check(g, "fixture_explicit_user_owner", owned,
+			        "fixture descriptor explicitly names "
+			        "TokenUser");
+			ok = owned && 0 != CreateDirectoryW(path, &sa);
 			LocalFree(sa.lpSecurityDescriptor);
 		}
 	}

@@ -555,11 +555,15 @@ static void worker(void)
 
 		CHECK(WF_OK == port.start(port.ctx, 5, path_of(L"huge.bin")));
 		for (int k = 0; k < 50 && !running; k++) {
-			running = wait_update(w, &u, false, 100) && 5 == u.gen;
+			running = wait_update(w, &u, false, 100) &&
+			        5 == u.gen && !u.finished;
 		}
 		CHECK(running); /* progress came: it is being read */
 		port.cancel(port.ctx);
 		CHECK(!wait_update(w, &u, true, 4000));
+		/* No answer alone could mean the broken worker is still hashing.
+		 * Cancellation must also end the in-flight operation. */
+		CHECK(wf_hashworker_idle(w));
 	} else {
 		skip("cancel of a running hash: no 3 GiB sparse file here");
 		CHECK(WF_OK == port.start(port.ctx, 5, path_of(L"big.bin")));

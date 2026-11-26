@@ -158,3 +158,14 @@ can run together. Variable or nonzero DOS-drive requests keep the drive lock.
 Elapsed-time checks for listing, editing and PDF decoding run without other
 CTest work. Parallelism never changes their limits. Keep every failed attempt
 when retrying, and reuse only completed individual results after interruption.
+
+Handle-count tests initialize the requested Windows code-page cache before
+their baseline: first non-ACP validation retains the Nls\\CodePage registry key
+for the process lifetime. Worker handles still must return to the exact baseline.
+Hash cancellation checks both absent completion and an idle worker; a hash still
+running past the observation window must fail. Private-state fixtures explicitly
+name TokenUser as owner, matching the product even with an elevated TokenOwner.
+Lock E2E uses the ordinary lock test's process-facts prerequisite before asking
+to close or terminate its owned helper. Unknown ancestry keeps those actions
+refused and records SKIP. Failed E2E check identifiers are printed without their
+free-text evidence so hosted logs identify the assertion while CSV stays local.

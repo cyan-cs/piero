@@ -40,6 +40,9 @@ int main(void)
 	        14 == written);
 	CloseHandle(h);
 	CHECK(p0_area_track(lab.area, L"text.txt", 0));
+	/* IsValidCodePage lazily retains Windows' Nls\\CodePage registry key.
+	 * Initialize that OS cache before counting worker-owned handles. */
+	CHECK(IsValidCodePage(932));
 	CHECK(GetProcessHandleCount(GetCurrentProcess(), &before));
 	CHECK(WF_OK == wf_previewworker_start(&w, WF_PREVIEW_BYTES, 932));
 	if (!w) {

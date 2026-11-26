@@ -737,6 +737,8 @@ static void ev_check(Ev *e,
 		e->passes++;
 	} else {
 		e->fails++;
+		/* Fixed check identifiers only; free-text evidence stays in the CSV. */
+		printf("FAIL check=%s rep=%d\n", check, rep);
 	}
 }
 

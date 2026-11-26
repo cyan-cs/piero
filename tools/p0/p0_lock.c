@@ -12,6 +12,8 @@
  * Included by p0_conpty_host.c after p0_state_gate.c, whose helpers it uses.
  */
 
+#include "process/wf_process_control_win.h"
+
 static wchar_t g_lock_helper[MAX_PATH * 2];
 
 typedef struct
@@ -79,6 +81,35 @@ static void lk_stop(LkHelper *h)
 	}
 }
 
+/* Match test_lock's process-facts prerequisite before asserting UI actions.
+ * An unreadable ancestor chain must keep close/terminate refused. */
+static int lk_process_prerequisite(Gate *g, const LkHelper *h)
+{
+	WfLockHolder holder = {0};
+	FILETIME created, exited, kernel, user;
+	bool known = GetProcessTimes(
+	                     h->proc, &created, &exited, &kernel, &user) != 0;
+
+	if (!known) {
+		ev_check(g->pr.e, "lock_helper_identity", 0,
+		        "owned helper creation time", "unavailable", false);
+		return 1;
+	}
+	holder.pid = h->pid;
+	holder.start = wf_proc_ft64(created);
+	wf_proc_describe(&holder, NULL);
+	if (WF_DENY_UNKNOWN == holder.end_deny ||
+	        (WF_DENY_SYSTEM == holder.end_deny && !holder.session)) {
+		printf("SKIP %s: owned helper process facts unavailable; "
+		       "session=%lu identity=%d close=%d end=%d\n",
+		        g->tag, (unsigned long)holder.session,
+		        holder.identity_ok, holder.close_deny, holder.end_deny);
+		g_gate_skips++;
+		return 77;
+	}
+	return 0;
+}
+
 static bool lk_wait(Gate *g, const char *text, const char *name, DWORD ms)
 {
 	Product *pr = &g->pr;
@@ -130,6 +161,13 @@ static bool lock_rename_case(Ev *e)
 	        "helper started and ready", ok ? "ready" : "NOT started", ok);
 	if (!ok) {
 		goto done;
+	}
+	{
+		int prerequisite = lk_process_prerequisite(g, &h);
+		if (prerequisite) {
+			ok = 77 == prerequisite;
+			goto done;
+		}
 	}
 	pty_send(&pr->p, "r", 1);
 	ok = lk_wait(g, "held.txt", "rename_listing_shows_the_file", 8000);
@@ -242,6 +280,13 @@ static bool lock_copy_case(Ev *e)
 	        "helper started and ready", ok ? "ready" : "NOT started", ok);
 	if (!ok) {
 		goto done;
+	}
+	{
+		int prerequisite = lk_process_prerequisite(g, &h);
+		if (prerequisite) {
+			ok = 77 == prerequisite;
+			goto done;
+		}
 	}
 	pty_send(&pr->p, "r", 1);
 	ok = lk_wait(g, "held.txt", "copy_listing_shows_the_file", 8000);

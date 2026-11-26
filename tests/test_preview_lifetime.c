@@ -90,6 +90,9 @@ int main(void)
 	entered = CreateEventW(NULL, TRUE, FALSE, NULL);
 	release_read = CreateEventW(NULL, TRUE, FALSE, NULL);
 	CHECK(entered && release_read);
+	/* Windows retains its Nls\\CodePage key after first non-ACP validation.
+	 * Keep that OS initialization outside the exact worker-handle baseline. */
+	CHECK(IsValidCodePage(932));
 	CHECK(GetProcessHandleCount(GetCurrentProcess(), &before));
 	for (unsigned i = 0; i < 102; i++) {
 		WfPreviewWorker *worker = NULL;
