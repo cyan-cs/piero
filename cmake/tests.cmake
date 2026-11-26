@@ -53,7 +53,7 @@ foreach(t markdown markdown_ui markdown_alloc)
 endforeach()
 # About tests read the canonical LICENSE and bundled notices; no temporary
 # files, state mutations or fixed names in the user's temporary directory.
-set_tests_properties(theme_ui PROPERTIES WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+set_tests_properties(theme_ui PROPERTIES WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" TIMEOUT 120)
 
 add_executable(test_decode_win tests/test_decode_win.c)
 target_link_libraries(test_decode_win PRIVATE wfdecode)
@@ -344,6 +344,10 @@ if(WF_PWSH)
     --scenario ui-audit --child $<TARGET_FILE:piero>
     --results ${CMAKE_CURRENT_BINARY_DIR}/ui-evidence --label ctest)
   set_tests_properties(ui_audit PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
+  add_test(NAME keyboard_profiles COMMAND $<TARGET_FILE:p0_conpty_host>
+    --scenario keyboard --child $<TARGET_FILE:piero>
+    --results ${CMAKE_CURRENT_BINARY_DIR}/keyboard-evidence --label ctest)
+  set_tests_properties(keyboard_profiles PROPERTIES TIMEOUT 90 RESOURCE_LOCK wf_dos_drive)
   add_test(NAME recovery_mutations COMMAND ${WF_PWSH} -NoProfile -ExecutionPolicy Bypass -File
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/p0/test_recovery_mutations.ps1
     -Compiler ${CMAKE_C_COMPILER} -Build ${CMAKE_CURRENT_BINARY_DIR} -Configuration $<CONFIG>)
@@ -373,12 +377,19 @@ if(WF_PWSH)
       set(mutant_hang_limit 240000)
     endif()
     set(control_hang_limit ${mutant_hang_limit})
-    if(mutant_test_name STREQUAL "test_batchexec")
-      # The complete control includes recovery children and the large fixture
-      # (21.98 s observed). Reuse its established ordinary CTest budget; keep
-      # the 15 s fail-fast mutant hang detector unchanged.
-      get_test_property(batchexec TIMEOUT control_seconds)
+    if(mutant_test_name STREQUAL "test_batchexec" OR
+        mutant_test_name STREQUAL "test_theme_ui" OR
+        mutant_test_name STREQUAL "test_image_hostile")
+      # Full controls are not fail-fast mutants. Hosted MSVC Debug takes
+      # 26.05 s for theme_ui and 16.22 s for image_hostile. Use the ordinary
+      # test budget, retaining the 15 s mutant hang detector.
+      string(REGEX REPLACE "^test_" "" control_test "${mutant_test_name}")
+      get_test_property(${control_test} TIMEOUT control_seconds)
       math(EXPR control_hang_limit "${control_seconds} * 1000")
+    elseif(mutant_test_name STREQUAL "test_fuzzyworker_win")
+      # Its ordinary test is registered later in this file (120 s). Even a
+      # passing hosted Debug control takes 13.31 s before concurrent load.
+      set(control_hang_limit 120000)
     endif()
     add_test(NAME release_mutations_${mutant_test_name} COMMAND ${WF_PWSH} -NoProfile -ExecutionPolicy Bypass -File
       ${CMAKE_CURRENT_SOURCE_DIR}/tools/p0/test_release_mutations.ps1

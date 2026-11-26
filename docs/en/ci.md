@@ -121,6 +121,12 @@ produce SKIP with the error code retained; unexpected errors remain failures.
 No alias or weaker product safety policy is substituted. Batch execution's full
 control uses the ordinary test's existing budget for its recovery children and
 large fixture; its fail-fast mutant hang limit stays unchanged.
+Theme, hostile-image and fuzzy-worker controls likewise use their ordinary
+test budgets: a healthy hosted MSVC Debug run can exceed the 15-second mutant
+deadline. Session-place assertions run before the large wrapped-text fixture
+so fail-fast session mutants reach their assertions promptly. Compilation
+failures and control failures report the local evidence path; control failures
+also report the supervisor state, exit code and elapsed time.
 
 Mutation definitions must reach assertions without introducing incidental
 undefined arithmetic, out-of-bounds scans or dangling pointers. Search-worker
@@ -169,3 +175,13 @@ Lock E2E uses the ordinary lock test's process-facts prerequisite before asking
 to close or terminate its owned helper. Unknown ancestry keeps those actions
 refused and records SKIP. Failed E2E check identifiers are printed without their
 free-text evidence so hosted logs identify the assertion while CSV stays local.
+
+For a `product_tui` timeout, inspect the last `PRODUCT-TUI phase=...` line in
+CTest's failure output. Each phase reports its start, result and elapsed time;
+check results are flushed to the local CSV as they occur. These diagnostics do
+not change the 150-second deadline or turn an interrupted scenario into a pass.
+
+`keyboard_profiles` runs the same Vim/Nano profile checks on text fixtures
+without image-decoder or Shell-association prerequisites. Editor entry waits
+for its status separators, since the file manager also displays `NORMAL`.
+The complete `product_tui` and `ui_audit` scenarios remain required.

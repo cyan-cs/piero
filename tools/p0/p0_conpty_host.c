@@ -733,12 +733,15 @@ static void ev_check(Ev *e,
 	/* free-text columns are quoted: they contain commas */
 	fprintf(e->results, "%s,%d,\"%s\",\"%s\",%s\n", check, rep, expected,
 	        observed, pass ? "PASS" : "FAIL");
+	/* A CTest timeout can kill the host before normal evidence teardown. */
+	fflush(e->results);
 	if (pass) {
 		e->passes++;
 	} else {
 		e->fails++;
 		/* Fixed check identifiers only; free-text evidence stays in the CSV. */
 		printf("FAIL check=%s rep=%d\n", check, rep);
+		fflush(stdout);
 	}
 }
 
@@ -2891,7 +2894,9 @@ static bool product_keyboard(Product *pr)
 	KEY_STEP(":sort name asc\r", "Sorted by name, ascending",
 	        "vim_sort_back_to_name");
 	KEY_STEP("j", "doc.txt", "vim_j_moves_to_the_file");
-	KEY_STEP("e", "NORMAL", "vim_editor_starts_in_normal_mode");
+	/* The file manager also says NORMAL. Wait for the editor's status
+	 * separators before sending g; a quiet old frame is not an open editor. */
+	KEY_STEP("e", "|  NORMAL  |", "vim_editor_starts_in_normal_mode");
 	KEY_STEP("g", "NORMAL g", "vim_editor_pending_sequence");
 	Sleep(WF_SEQ_TIMEOUT_MS + 100);
 	pty_snapshot(&p, pr->screen, sizeof pr->screen);
@@ -3012,6 +3017,34 @@ static void product_teardown(Product *pr)
 	        p0_area_root(pr->lab.area));
 	ev_write_text(pr->e, L"artifacts\\fixture.txt", pr->output);
 	p0_lab_close(&pr->lab, 1);
+}
+
+/* Text-only profile checks need neither an image decoder nor Shell
+ * associations. Keep them runnable when those independent prerequisites fail. */
+static int scn_keyboard(Ev *e)
+{
+	Product pr;
+	int rc = 1;
+
+	memset(&pr, 0, sizeof pr);
+	pr.e = e;
+	if (!p0_lab_open(&pr.lab, "keyboard", 1)) {
+		ev_check(e, "keyboard_fixture", 0, "owned NTFS root",
+		        "unavailable", false);
+		return 1;
+	}
+	if (p0_area_mkdir(pr.lab.area, L"piero") &&
+	        p0_area_mkdir(pr.lab.area, L"browse") &&
+	        p0_area_mkdir(pr.lab.area, L"browse\\child") &&
+	        product_file(
+	                &pr.lab, L"browse\\doc.txt", "keyboard fixture\n")) {
+		rc = product_keyboard(&pr) && !e->fails ? 0 : 1;
+	} else {
+		ev_check(e, "keyboard_fixture", 0, "text fixture", "failed",
+		        false);
+	}
+	product_teardown(&pr);
+	return rc;
 }
 
 /* Archives as folders: a ZIP is listed in the right pane, entered with Enter,
@@ -3308,6 +3341,22 @@ typedef enum
 	PRODUCT_PICTURES /* pictures and PDF only, the quick one to mutate */
 } ProductScope;
 
+/* Only fixed phase identifiers and elapsed time enter the CTest output.
+ * Flush now: a killed host will never reach its normal summary. */
+static void product_phase_log(
+        const char *phase, const char *state, double started)
+{
+	printf("PRODUCT-TUI phase=%s state=%s elapsed_ms=%.0f\n", phase, state,
+	        now_ms() - started);
+	fflush(stdout);
+}
+
+static bool product_phase_result(const char *phase, bool ok, double started)
+{
+	product_phase_log(phase, ok ? "done" : "failed", started);
+	return ok;
+}
+
 static int scn_product(Ev *e, ProductScope scope)
 {
 	Product pr;
@@ -3315,17 +3364,27 @@ static int scn_product(Ev *e, ProductScope scope)
 	bool ui_only = scope == PRODUCT_UI;
 	bool file_ops = scope == PRODUCT_FILE_OPS;
 	int prerequisite;
+	double phase_started = now_ms();
 
+#define PRODUCT_PHASE(call)                                                    \
+	(product_phase_log(#call, "begin", phase_started),                     \
+	        product_phase_result(#call, (call), phase_started))
+
+	product_phase_log("prerequisites", "begin", phase_started);
 	if (!file_ops && (prerequisite = require_appcontainer(e)) != 0) {
+		product_phase_log("prerequisites",
+		        77 == prerequisite ? "skipped" : "failed",
+		        phase_started);
 		return prerequisite;
 	}
 
 	memset(&pr, 0, sizeof pr);
 	pr.e = e;
 	if (ERROR_SUCCESS != wf_test_assoc_name(&open_association)) {
+		product_phase_log("prerequisites", "failed", phase_started);
 		return 1;
 	}
-	if (!p0_lab_open(&pr.lab, "product", 1)) {
+	if (!PRODUCT_PHASE(p0_lab_open(&pr.lab, "product", 1))) {
 		ev_check(e, "isolated_fixture", 0, "owned NTFS root",
 		        "unavailable", 0);
 		return 1;
@@ -3333,6 +3392,9 @@ static int scn_product(Ev *e, ProductScope scope)
 	if (file_ops &&
 	        (prerequisite = require_readable_ancestors(
 	                 e, p0_area_root(pr.lab.area))) != 0) {
+		product_phase_log("prerequisites",
+		        77 == prerequisite ? "skipped" : "failed",
+		        phase_started);
 		if (p0_lab_close(&pr.lab, 1)) {
 			ev_check(e, "skipped_copy_fixture_cleanup", 0,
 			        "test drive released", "cleanup failed", false);
@@ -3340,36 +3402,49 @@ static int scn_product(Ev *e, ProductScope scope)
 		}
 		return prerequisite;
 	}
+	product_phase_log("prerequisites", "done", phase_started);
 	if (PRODUCT_PICTURES == scope) {
-		if (product_setup(&pr) && product_pictures(&pr) &&
-		        product_picture_failures(&pr) &&
-		        product_ui_finish(&pr) && product_exit(&pr)) {
+		if (PRODUCT_PHASE(product_setup(&pr)) &&
+		        PRODUCT_PHASE(product_pictures(&pr)) &&
+		        PRODUCT_PHASE(product_picture_failures(&pr)) &&
+		        PRODUCT_PHASE(product_ui_finish(&pr)) &&
+		        PRODUCT_PHASE(product_exit(&pr))) {
 			rc = e->fails ? 1 : 0;
 		}
-	} else if (product_setup(&pr) && product_preview(&pr) &&
-	        product_gates(&pr) && product_navigation(&pr) &&
-	        product_path_bar_and_details(&pr) &&
-	        (scope != PRODUCT_FULL || product_open(&pr)) &&
-	        product_editor(&pr) && product_archive(&pr) &&
+	} else if (PRODUCT_PHASE(product_setup(&pr)) &&
+	        PRODUCT_PHASE(product_preview(&pr)) &&
+	        PRODUCT_PHASE(product_gates(&pr)) &&
+	        PRODUCT_PHASE(product_navigation(&pr)) &&
+	        PRODUCT_PHASE(product_path_bar_and_details(&pr)) &&
+	        (scope != PRODUCT_FULL || PRODUCT_PHASE(product_open(&pr))) &&
+	        PRODUCT_PHASE(product_editor(&pr)) &&
+	        PRODUCT_PHASE(product_archive(&pr)) &&
 	        (file_ops ||
-	                (product_pictures(&pr) &&
-	                        product_picture_failures(&pr))) &&
+	                (PRODUCT_PHASE(product_pictures(&pr)) &&
+	                        PRODUCT_PHASE(
+	                                product_picture_failures(&pr)))) &&
 #ifdef WF_PRODUCT_EDIT
-	        product_edit(&pr) && product_move(&pr) &&
+	        PRODUCT_PHASE(product_edit(&pr)) &&
+	        PRODUCT_PHASE(product_move(&pr)) &&
 #endif
-	        (ui_only ? product_ui_finish(&pr)
-	                 : product_transfer_and_resize(&pr)) &&
-	        (ui_only || product_midtransfer(&pr)) && product_exit(&pr) &&
+	        (ui_only ? PRODUCT_PHASE(product_ui_finish(&pr))
+	                 : PRODUCT_PHASE(product_transfer_and_resize(&pr))) &&
+	        (ui_only || PRODUCT_PHASE(product_midtransfer(&pr))) &&
+	        PRODUCT_PHASE(product_exit(&pr)) &&
 	        (file_ops ||
-	                (product_editor_nano(&pr) && product_themes(&pr) &&
-	                        product_keyboard(&pr)))) {
+	                (PRODUCT_PHASE(product_editor_nano(&pr)) &&
+	                        PRODUCT_PHASE(product_themes(&pr)) &&
+	                        PRODUCT_PHASE(product_keyboard(&pr))))) {
 		rc = e->fails ? 1 : 0;
 	}
 	if (pr.blocked && !e->fails) {
 		rc = 77;
 	}
+	product_phase_log("teardown", "begin", phase_started);
 	product_teardown(&pr);
+	product_phase_log("teardown", "done", phase_started);
 	return rc;
+#undef PRODUCT_PHASE
 }
 
 static BOOL WINAPI keep_test_host_alive(DWORD event)
@@ -4186,6 +4261,7 @@ int wmain(int argc, wchar_t **argv)
 
 	if (!wcscmp(scenario, L"product") || !wcscmp(scenario, L"file-ops") ||
 	        !wcscmp(scenario, L"ui-audit") ||
+	        !wcscmp(scenario, L"keyboard") ||
 	        !wcscmp(scenario, L"shutdown-go") ||
 	        !wcscmp(scenario, L"state-gate") ||
 	        !wcscmp(scenario, L"first-run") ||
@@ -4230,6 +4306,8 @@ int wmain(int argc, wchar_t **argv)
 		rc = scn_product(&ev,
 		        !wcscmp(scenario, L"ui-audit") ? PRODUCT_UI
 		                                       : PRODUCT_FULL);
+	} else if (!wcscmp(scenario, L"keyboard")) {
+		rc = scn_keyboard(&ev);
 	} else if (!wcscmp(scenario, L"file-ops")) {
 		rc = scn_product(&ev, PRODUCT_FILE_OPS);
 	} else if (!wcscmp(scenario, L"pictures")) {

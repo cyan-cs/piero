@@ -599,7 +599,7 @@ bool wf_state_report_any'},
  @{name='terminal_left_out_candidate_is_the_reason';file='src/fs/wf_terminal_win.c';test='tests/test_terminal.c';old='return START_SKIPPED;';new='*error = ERROR_BAD_PATHNAME; return START_FAILED;'},
  @{name='terminal_memory_failure_hidden';file='src/fs/wf_terminal_win.c';test='tests/test_terminal.c';old='*error = memory ? memory : first;';new='*error = first;'},
  @{name='merge_enters_a_folder_under_stop';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='WF_COLLIDE_STOP != r->spec->collide &&';new='1 &&'},
- @{name='merge_registers_nothing_for_undo';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='if (merge && OUT_OK == o &&';new='if (0 && merge && OUT_OK == o &&'},
+ @{name='merge_registers_nothing_for_undo';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='add_created(r, dst, &here, leaf_use, child_dir);';new='(void)r; (void)dst; (void)here; (void)leaf_use; (void)child_dir;'},
  @{name='merge_keep_both_never_renames';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='if (merge && WF_COLLIDE_RENAME == r->spec->collide) {';new='if (0 && merge && WF_COLLIDE_RENAME == r->spec->collide) {'},
  @{name='merge_new_folder_is_not_staged';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='if (r->stage || (depth > 0 && !merging(r)) ||';new='if (r->stage || depth > 0 ||'},
  @{name='merge_created_forgets_its_parent';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='grown[res->created_n].parent = *parent;';new='grown[res->created_n].parent.kind = WF_ID_NONE; (void)parent;'},
@@ -790,7 +790,9 @@ foreach($m in $mutants){
   New-Item -ItemType Directory -Path $controlDir|Out-Null
   $runner=Join-Path $buildRoot 'p0_run.exe'
   $controlReceipt=Join-Path $controlDir 'process.json'
+  $controlClock=[Diagnostics.Stopwatch]::StartNew()
   & $runner $ControlTimeoutMs $controlExe (Join-Path $controlDir 'test.log') (Join-Path $controlDir 'test-error.log') $controlReceipt
+  $controlClock.Stop()
   if($LASTEXITCODE -ne 0){throw "Control supervisor failed: $controlName"}
   $control=Get-Content -LiteralPath $controlReceipt -Raw | ConvertFrom-Json
   $controlVerdict=Get-WfControlVerdict $control
@@ -799,7 +801,7 @@ foreach($m in $mutants){
    Get-Content -LiteralPath (Join-Path $controlDir 'test.log') | Write-Host
    exit 77
   }
-  if($controlVerdict -ne 'PASS'){throw "Unmodified control failed; no mutant verdict is valid: $controlName; see $controlDir"}
+  if($controlVerdict -ne 'PASS'){throw "Unmodified control failed; no mutant verdict is valid: $controlName, state=$($control.state), Win32=$($control.error), exit=$($control.exit_code), ran $([int]$controlClock.Elapsed.TotalMilliseconds) ms of a $ControlTimeoutMs ms hang limit; see $controlDir"}
   $controls[$m.test]=$true
  }
  $dir=Join-Path $root $m.name;New-Item -ItemType Directory -Path $dir|Out-Null
@@ -1007,7 +1009,7 @@ foreach($m in $mutants){
  try{$ErrorActionPreference='Continue';& $Compiler @arguments *> (Join-Path $dir 'build.log');$compileExit=$LASTEXITCODE}
  finally{$ErrorActionPreference=$saved}
  $compileClock.Stop()
- if($compileExit -ne 0){throw "Mutant compile failed, never a kill: $($m.name)"}
+ if($compileExit -ne 0){throw "Mutant compile failed, never a kill: $($m.name); see $(Join-Path $dir 'build.log')"}
  $runner=Join-Path $buildRoot 'p0_run.exe'
  $receiptPath=Join-Path $dir 'process.json'
  $env:WF_TEST_FAIL_FAST='1'

@@ -3700,8 +3700,11 @@ static void searching_backwards_finds_the_match_before_the_cursor(void)
 
 int main(void)
 {
-	uncertain_saves_cannot_be_retried_and_wrapped_cursor_stays_visible();
 	setvbuf(stdout, NULL, _IONBF, 0);
+	/* Reach session assertions before the large wrapped-text fixture, so
+	 * fail-fast session mutants do not spend their hang budget drawing it. */
+	the_session_place_is_reported_and_put_back();
+	uncertain_saves_cannot_be_retried_and_wrapped_cursor_stays_visible();
 	opening_typing_and_saving();
 	a_wsl_file_is_edited_and_saved_like_any_other();
 	names_that_differ_by_case_are_two_files_in_a_distribution();
@@ -3716,7 +3719,6 @@ int main(void)
 	kept_wrap_rows_are_never_stale();
 	the_line_end_label_follows_the_edits_that_change_it();
 	an_outside_change_is_said_once_and_nothing_else_happens();
-	the_session_place_is_reported_and_put_back();
 	ime_leftovers_are_not_answers();
 	a_prompt_takes_the_native_cursor_and_gives_it_back();
 	committed_japanese_is_saved_and_read_back();
