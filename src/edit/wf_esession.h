@@ -158,6 +158,9 @@ void wf_es_save_drafts(WfEditSession *s, uint64_t now_ms);
 /* One deadline wake, then infinite wait again; no periodic polling. */
 uint32_t wf_es_timeout(const WfEditSession *s, uint64_t now_ms);
 bool wf_es_tick(WfEditSession *s, uint64_t now_ms);
+/* While a sliced motion is pending, retain subsequent input in the caller's
+ * bounded batch and continue pumping results/timers. Resume input afterward. */
+bool wf_es_motion_pending(const WfEditSession *s);
 void wf_es_draw(WfEditSession *s, WfFrame *f);
 
 size_t wf_es_buffer_count(const WfEditSession *s);

@@ -174,6 +174,16 @@ struct WfEditSession
 	WfVim vim;          /* operators, Visual mode, registers, macros */
 	unsigned vim_count; /* the count typed before the command being run */
 	uint64_t now_ms;
+	/* A long word motion runs in slices on the event loop. The text and the
+	 * visible cursor stay unchanged until the result is complete. */
+	struct
+	{
+		WfWordScan scan;
+		WfBuffer *buffer;
+		WfPos from;
+		uint64_t gen;
+		bool active, extend;
+	} motion;
 	char exhist[WF_ES_HISTORY][WF_ES_INPUT_MAX];
 	size_t exhist_n, exhist_pos;
 };

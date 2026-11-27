@@ -156,8 +156,11 @@ static void one_huge_line(void)
 	/* moving by columns and cells on that line stays cheap */
 	t0 = now_ms();
 	wf_ed_move(e, WF_MV_LINE_END, false, 0);
+	CHECK(n + 2000 == e->cur.col);
 	wf_ed_move(e, WF_MV_LEFT, false, 0);
+	CHECK(n + 1999 == e->cur.col);
 	wf_ed_move(e, WF_MV_WORD_LEFT, false, 0);
+	CHECK(0 == e->cur.col);
 	printf("  line end, left, word left on it: %.1f ms\n", now_ms() - t0);
 	CHECK(now_ms() - t0 < 500);
 	wf_ed_free(e);

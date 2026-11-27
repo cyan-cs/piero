@@ -2810,7 +2810,8 @@ static bool product_themes(Product *pr)
 
 /* The Vim and Nano profiles in the real program: modified keys, the command
  * line, the sort menu, the keyboard page of the settings and the editor's
- * modes, all from a configuration file. Nothing is saved or changed. */
+ * modes, all from a configuration file. A Standard-profile check also edits
+ * and saves an owned long-line fixture to verify motion/type-ahead ordering. */
 static bool product_keyboard(Product *pr)
 {
 	Pty p;
@@ -2958,6 +2959,72 @@ static bool product_keyboard(Product *pr)
 	ev_check(pr->e, "nano_q_exits", 0, "exit", ok ? "exited" : "running",
 	        ok);
 	pty_finish(&p);
+	if (!ok) {
+		return false;
+	}
+	/* A word motion and the following edit/save arrive in ONE input batch.
+	 * The edit must wait for the sliced motion, rather than being applied at
+	 * the old cursor or lost when the loop yields. Compare the saved bytes. */
+	drop_config(cfg);
+	PRODUCT_REQUIRE(product_file(&pr->lab, L"piero\\config.ini",
+	        "[meta]\r\nschema_version = 1\r\nonboarding_completed = "
+	        "true\r\n"
+	        "[updates]\r\nenabled = false\r\nconsent_recorded = true\r\n"
+	        "[keyboard]\r\nprofile = standard\r\n"
+	        "[editor]\r\nsoft_wrap = false\r\nrecovery_draft = false\r\n"));
+	{
+		size_t n = 1u << 20;
+		char *text = malloc(n + 2);
+		wchar_t actual[1100], expected[1100];
+		char actual_hash[P0_HASH_HEX], expected_hash[P0_HASH_HEX];
+
+		PRODUCT_REQUIRE(text);
+		memset(text, 'x', n);
+		text[n] = 0;
+		ok = p0_area_mkdir(pr->lab.area, L"word-motion") &&
+		        product_file(&pr->lab, L"word-motion\\long.txt", text);
+		memmove(text + 1, text, n + 1);
+		text[0] = 'Z';
+		ok = ok &&
+		        product_file(
+		                &pr->lab, L"piero\\word-expected.bin", text);
+		free(text);
+		PRODUCT_REQUIRE(ok &&
+		        p0_lab_path(&pr->lab, L"word-motion", dir, 1024) &&
+		        p0_lab_path(&pr->lab, L"word-motion\\long.txt", actual,
+		                1100) &&
+		        p0_lab_path(&pr->lab, L"piero\\word-expected.bin",
+		                expected, 1100));
+		PRODUCT_REQUIRE(theme_start(pr, &p, dir, false, L"en"));
+		ok = product_wait(
+		        &p, "long.txt", pr->screen, sizeof pr->screen);
+		KEY_CHECK("word_motion_listing", "long.txt", ok);
+		KEY_STEP("\x1b[B", "long.txt", "word_motion_select");
+		KEY_STEP("e", "^S Save", "word_motion_editor");
+		static const char batch[] = "\x1b[F\x1b[1;5DZ\x13";
+
+		KEY_CHECK("word_motion_expected_bytes", "expected SHA-256",
+		        p0_sha256_file(expected, expected_hash));
+		pty_write(&p, batch, sizeof batch - 1);
+		/* A clean editor already says Saved. Observe the changed file,
+		 * not that old status, to prove the whole batch was executed. */
+		ok = false;
+		for (ULONGLONG end = GetTickCount64() + 10000;
+		        !ok && GetTickCount64() < end;) {
+			ok = p0_sha256_file(actual, actual_hash) &&
+			        !strcmp(actual_hash, expected_hash);
+			if (!ok) {
+				Sleep(20);
+			}
+		}
+		KEY_CHECK("word_motion_typeahead_is_preserved",
+		        "Z before the long word", ok);
+		KEY_STEP("\x18", "long.txt", "word_motion_editor_exit");
+		pty_send(&p, "q", 1);
+		ok = WAIT_OBJECT_0 == WaitForSingleObject(p.pi.hProcess, 5000);
+		KEY_CHECK("word_motion_exit", "exit", ok);
+		pty_finish(&p);
+	}
 	drop_config(cfg);
 #undef KEY_CHECK
 #undef KEY_STEP

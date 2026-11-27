@@ -540,13 +540,17 @@ typedef enum
 /* Dispatches a batch of input; asks the loop to quit or reports a fatal error.
  */
 static DispatchResult dispatch(
-        Loop *lp, const WfEvent *ev, size_t n, bool *dirty)
+        Loop *lp, const WfEvent *ev, size_t n, bool *dirty, size_t *consumed)
 {
 	size_t i;
 
 	for (i = 0; i < n; i++) {
 		WfAction act;
 
+		if (&WF_MODE_EDITOR == lp->app.mode &&
+		        wf_es_motion_pending(lp->editor)) {
+			break;
+		}
 		if (WF_EV_RESIZE == ev[i].type) {
 			if (wf_term_size(lp->term, &lp->app.cols,
 			            &lp->app.rows) != WF_OK) {
@@ -578,6 +582,7 @@ static DispatchResult dispatch(
 			*dirty = true;
 		}
 	}
+	*consumed = i;
 	return DISPATCH_CONTINUE;
 }
 
@@ -731,6 +736,8 @@ static void fill_wait_handles(Loop *lp, HANDLE waits[W_COUNT])
 int wf_main_run_loop(Loop *lp)
 {
 	HANDLE waits[W_COUNT];
+	WfEvent deferred[EVENTS_PER_TICK];
+	size_t deferred_n = 0;
 
 	fill_wait_handles(lp, waits);
 	lp->app.now_ms = GetTickCount64();
@@ -762,7 +769,7 @@ int wf_main_run_loop(Loop *lp)
 		fill_lazy_wait_handles(lp, waits);
 		lp->graphics_retry = false;
 		DispatchResult quit;
-		size_t n;
+		size_t n, consumed = 0;
 
 		if (lp->watch) {
 			waits[count++] = wf_watch_event(lp->watch);
@@ -780,6 +787,9 @@ int wf_main_run_loop(Loop *lp)
 		if (&WF_MODE_EDITOR == lp->app.mode) {
 			timeout = min_u32(timeout,
 			        wf_es_timeout(lp->editor, lp->app.now_ms));
+		}
+		if (deferred_n) {
+			timeout = 0;
 		}
 		w = WaitForMultipleObjects(count, waits, FALSE,
 		        WF_WAIT_FOREVER == timeout ? INFINITE : timeout);
@@ -822,16 +832,30 @@ int wf_main_run_loop(Loop *lp)
 			wf_app_dircache_enable(&lp->app, false);
 		}
 
-		/* Input is always drained: the handle can be signalled with
-		 * nothing readable, and a timeout wake costs one empty read. */
-		n = wf_term_read_events(lp->term, ev, EVENTS_PER_TICK);
+		/* Keep the rest of this bounded batch ordered behind a sliced
+		 * motion. Leave further input in the console until it completes;
+		 * results, timers and shutdown keep being serviced meanwhile. */
+		if (deferred_n) {
+			n = deferred_n;
+			memcpy(ev, deferred, n * sizeof *ev);
+		} else if (&WF_MODE_EDITOR == lp->app.mode &&
+		        wf_es_motion_pending(lp->editor)) {
+			n = 0;
+		} else {
+			n = wf_term_read_events(lp->term, ev, EVENTS_PER_TICK);
+		}
 		dirty |= sync_graphics(lp);
-		quit = dispatch(lp, ev, n, &dirty);
+		quit = dispatch(lp, ev, n, &dirty, &consumed);
 		if (DISPATCH_FATAL == quit) {
 			return 1;
 		}
 		if (DISPATCH_QUIT == quit) {
 			return 0;
+		}
+		deferred_n = n - consumed;
+		if (deferred_n) {
+			memcpy(deferred, ev + consumed,
+			        deferred_n * sizeof *ev);
 		}
 
 		if (pump_results(lp)) {

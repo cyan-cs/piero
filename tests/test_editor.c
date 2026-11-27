@@ -946,6 +946,107 @@ static void search_and_replace(void)
 	}
 }
 
+static int reference_word_class(const WfELine *l, size_t col)
+{
+	uint32_t cp;
+
+	(void)wf_utf8_decode(l->s + col, l->len - col, &cp);
+	if (' ' == cp || '\t' == cp) {
+		return 0;
+	}
+	return cp >= 0x80 || '_' == cp || (cp >= 'a' && cp <= 'z') ||
+	                (cp >= 'A' && cp <= 'Z') || (cp >= '0' && cp <= '9')
+	        ? 1
+	        : 2;
+}
+
+static int reference_word_before(const WfELine *l, size_t col)
+{
+	col--;
+	while (col && 0x80 == ((unsigned char)l->s[col] & 0xC0)) {
+		col--;
+	}
+	return reference_word_class(l, col);
+}
+
+/* The original scalar/cluster algorithm is an independent oracle: yielding
+ * in the middle of UTF-8 or a combining run must not change a motion. */
+static size_t reference_word(const WfELine *l, size_t col, bool right)
+{
+	int kind;
+
+	if (right) {
+		if (col == l->len) {
+			return col;
+		}
+		kind = reference_word_class(l, col);
+		while (col < l->len && kind &&
+		        reference_word_class(l, col) == kind) {
+			col = wf_et_col_next(l, col);
+		}
+		while (col < l->len && !reference_word_class(l, col)) {
+			col = wf_et_col_next(l, col);
+		}
+	} else {
+		while (col && !reference_word_before(l, col)) {
+			col = wf_et_col_prev(l, col);
+		}
+		if (col) {
+			kind = reference_word_before(l, col);
+			while (col && reference_word_before(l, col) == kind) {
+				col = wf_et_col_prev(l, col);
+			}
+		}
+	}
+	return col;
+}
+
+static void sliced_words_keep_utf8_clusters_and_word_boundaries(void)
+{
+	static const char *const samples[] = {"", "abc_DEF12. !?\t  word",
+	        " \t ", "a\xCC\x81.!\xCC\x81 \t\xE6\x97\xA5\xE6\x9C\xAC x",
+	        "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD\xE2\x80\x8D !",
+	        "\xCC\x81\xCC\x81.!\t\xCC\x81"};
+	static const size_t budgets[] = {1, 3, 7, 65536};
+
+	for (size_t i = 0; i < WF_ARRAY_LEN(samples); i++) {
+		fresh(samples[i]);
+		const WfELine *l = &ed.text.lines[0];
+
+		for (size_t col = 0; col <= l->len; col++) {
+			if (col < l->len &&
+			        0x80 == ((unsigned char)l->s[col] & 0xC0)) {
+				continue;
+			}
+			for (int right = 0; right < 2; right++) {
+				for (size_t b = 0; b < WF_ARRAY_LEN(budgets);
+				        b++) {
+					WfWordScan scan;
+					bool done = false;
+					size_t turns = 0;
+
+					wf_ed_word_scan_begin(
+					        &scan, col, 0 != right);
+					while (!done &&
+					        turns++ < l->len * 2 + 10) {
+						size_t before = scan.col;
+
+						done = wf_ed_word_scan_step(
+						        l, &scan, budgets[b]);
+						CHECK((right ? scan.col - before
+						             : before - scan.col) <=
+						        budgets[b] + 3);
+					}
+					CHECK(done);
+					CHECK(scan.col ==
+					        reference_word(
+					                l, col, 0 != right));
+				}
+			}
+		}
+	}
+}
+
 static void movement_over_words_lines_and_pages(void)
 {
 	fresh("foo_bar baz\n  qux.quux\nlast");
@@ -1771,6 +1872,7 @@ int main(void)
 	delete_line_variants();
 	search_and_replace();
 	movement_over_words_lines_and_pages();
+	sliced_words_keep_utf8_clusters_and_word_boundaries();
 	soft_wrap_moves_by_rows();
 	limits_and_read_only();
 	a_failed_replace_takes_itself_back();

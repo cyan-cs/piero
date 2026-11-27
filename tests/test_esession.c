@@ -3698,12 +3698,90 @@ static void searching_backwards_finds_the_match_before_the_cursor(void)
 	}
 }
 
+static void long_word_motions_yield_and_discard_superseded_results(void)
+{
+	size_t n = 1u << 20;
+	char *text = malloc(n);
+	WfEditor *e;
+	WfEncoding enc = {WF_ENC_UTF8, 0};
+	WfEvent resize = {WF_EV_RESIZE, 0, WF_KEY_NONE, 0};
+	size_t ticks;
+
+	CHECK(NULL != text);
+	if (!text) {
+		return;
+	}
+	memset(text, 'x', n);
+	setup(WF_KM_PIERO);
+	S->cfg.drafts = false;
+	add(L"C:\\big.txt", "");
+	CHECK(open_file(L"C:\\big.txt"));
+	e = wf_es_current(S);
+	CHECK(WF_OK == wf_ed_set_text(e, text, n, enc));
+	e->cur.col = n;
+	(void)wf_es_run(S, WF_CMD_WORD_LEFT, true);
+	CHECK(wf_es_motion_pending(S));
+	CHECK(e->cur.col == n && !e->has_anchor);
+	CHECK(0 == wf_es_timeout(S, 0));
+	/* Resizing and the timer remain usable while the scan is pending. */
+	CHECK(WF_ES_REDRAW == wf_es_event(S, &resize, ROWS + 1, COLS + 1));
+	for (ticks = 0; wf_es_motion_pending(S) && ticks < 100; ticks++) {
+		CHECK(e->cur.col == n);
+		(void)wf_es_tick(S, ticks);
+	}
+	CHECK(ticks > 1 && !wf_es_motion_pending(S));
+	CHECK(!e->cur.col && e->has_anchor && e->anchor.col == n);
+	(void)wf_es_run(S, WF_CMD_WORD_RIGHT, false);
+	CHECK(wf_es_motion_pending(S));
+	for (ticks = 0; wf_es_motion_pending(S) && ticks < 100; ticks++) {
+		(void)wf_es_tick(S, ticks);
+	}
+	CHECK(e->cur.col == n && !e->has_anchor);
+	/* The next typed character is applied after the completed movement. */
+	chr('Z');
+	CHECK(e->cur.col == n + 1 && e->text.lines[0].s[n] == 'Z');
+	(void)wf_es_run(S, WF_CMD_WORD_LEFT, false);
+	CHECK(wf_es_motion_pending(S));
+	CHECK(WF_OK ==
+	        wf_ed_type(e, 'Q')); /* direct model edit supersedes it */
+	WfPos edited = e->cur;
+	(void)wf_es_tick(S, 200);
+	CHECK(!wf_es_motion_pending(S) && !wf_pos_cmp(edited, e->cur));
+	/* Direct event producers (for example macro playback) preserve ordering
+	 * too, even though they do not own the terminal loop's deferred batch. */
+	CHECK(WF_OK == wf_ed_set_text(e, text, n, enc));
+	e->cur.col = n;
+	(void)wf_es_run(S, WF_CMD_WORD_LEFT, false);
+	CHECK(wf_es_motion_pending(S));
+	chr('Z');
+	CHECK(!wf_es_motion_pending(S) && e->cur.col == 1 &&
+	        e->text.lines[0].s[0] == 'Z' && e->text.lines[0].len == n + 1);
+	/* A huge combining cluster also yields without exposing a partial
+	 * character. No worker thread borrows a mutable line or needs copying. */
+	text[0] = 'a';
+	for (size_t i = 1; i + 1 < n; i += 2) {
+		((unsigned char *)text)[i] = 0xCC;
+		((unsigned char *)text)[i + 1] = 0x81;
+	}
+	CHECK(WF_OK == wf_ed_set_text(e, text, n - 1, enc));
+	e->cur.col = n - 1;
+	(void)wf_es_run(S, WF_CMD_WORD_LEFT, false);
+	CHECK(wf_es_motion_pending(S));
+	for (ticks = 0; wf_es_motion_pending(S) && ticks < 100; ticks++) {
+		CHECK(e->cur.col == n - 1);
+		(void)wf_es_tick(S, ticks);
+	}
+	CHECK(ticks > 1 && !wf_es_motion_pending(S) && !e->cur.col);
+	free(text);
+}
+
 int main(void)
 {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	/* Reach session assertions before the large wrapped-text fixture, so
 	 * fail-fast session mutants do not spend their hang budget drawing it. */
 	the_session_place_is_reported_and_put_back();
+	long_word_motions_yield_and_discard_superseded_results();
 	uncertain_saves_cannot_be_retried_and_wrapped_cursor_stays_visible();
 	opening_typing_and_saving();
 	a_wsl_file_is_edited_and_saved_like_any_other();

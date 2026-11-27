@@ -103,6 +103,20 @@ typedef enum
 
 /* `extend`: the selection grows (Shift). `page` is the page size in lines. */
 void wf_ed_move(WfEditor *e, WfMove m, bool extend, size_t page);
+/* Resumable word scan. Each step examines at most `budget` bytes plus one
+ * UTF-8 scalar. It owns no text; callers must discard it when the line changes.
+ * The column is provisional until step returns true (including long runs of
+ * combining marks, which must never expose a cursor inside a cluster). */
+typedef struct
+{
+	size_t col;
+	int kind, phase;
+	bool right, cluster;
+} WfWordScan;
+void wf_ed_word_scan_begin(WfWordScan *scan, size_t col, bool right);
+bool wf_ed_word_scan_step(const WfELine *line, WfWordScan *scan, size_t budget);
+/* Apply a completed motion, preserving Shift/mark selection semantics. */
+void wf_ed_move_to(WfEditor *e, WfPos to, bool extend);
 /* 1-based line and column (in characters); clamped to the text. */
 void wf_ed_goto(WfEditor *e, size_t line, size_t column);
 

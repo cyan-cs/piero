@@ -1563,12 +1563,48 @@ WfEsResult wf_es_run(WfEditSession *s, WfEdCmd cmd, bool extend)
 	return exec(s, (WfEdAction){cmd, extend});
 }
 
+#define WORD_SLICE_BYTES (64u << 10)
+
+bool wf_es_motion_pending(const WfEditSession *s)
+{
+	return s && s->motion.active;
+}
+
+static bool word_slice(WfEditSession *s)
+{
+	WfBuffer *b = wf_es_buffer(s);
+
+	if (!s->motion.active) {
+		return false;
+	}
+	if (b != s->motion.buffer || !b || b->ed.text.gen != s->motion.gen ||
+	        wf_pos_cmp(b->ed.cur, s->motion.from)) {
+		/* A reload, buffer switch or direct model edit supersedes the scan. */
+		s->motion.active = false;
+		return false;
+	}
+	if (!wf_ed_word_scan_step(&b->ed.text.lines[s->motion.from.line],
+	            &s->motion.scan, WORD_SLICE_BYTES)) {
+		return false;
+	}
+	wf_ed_move_to(&b->ed, (WfPos){s->motion.from.line, s->motion.scan.col},
+	        s->motion.extend);
+	s->motion.active = false;
+	return true;
+}
+
 static WfEsResult exec(WfEditSession *s, WfEdAction a)
 {
 	WfBuffer *b = wf_es_buffer(s);
 	WfStatus st = WF_OK;
 	bool clip_bad = false;
 
+	/* Direct programmatic commands (including Vim operators/macros) retain
+	 * their ordered synchronous contract. Terminal input is held by the loop
+	 * instead, so ordinary long motions yield between slices. */
+	while (s->motion.active) {
+		(void)word_slice(s);
+	}
 	if (!b) {
 		return WF_ES_CLOSED;
 	}
@@ -1594,6 +1630,23 @@ static WfEsResult exec(WfEditSession *s, WfEdAction a)
 	case WF_CMD_DOC_END:
 	case WF_CMD_WORD_LEFT:
 	case WF_CMD_WORD_RIGHT:
+		if ((WF_CMD_WORD_LEFT == a.cmd || WF_CMD_WORD_RIGHT == a.cmd) &&
+		        b->ed.text.lines[b->ed.cur.line].len >
+		                WORD_SLICE_BYTES &&
+		        ((WF_CMD_WORD_LEFT == a.cmd && b->ed.cur.col) ||
+		                (WF_CMD_WORD_RIGHT == a.cmd &&
+		                        b->ed.cur.col <
+		                                b->ed.text.lines[b->ed.cur.line]
+		                                        .len))) {
+			s->motion.buffer = b;
+			s->motion.from = b->ed.cur;
+			s->motion.gen = b->ed.text.gen;
+			s->motion.extend = a.extend;
+			s->motion.active = true;
+			wf_ed_word_scan_begin(&s->motion.scan, b->ed.cur.col,
+			        WF_CMD_WORD_RIGHT == a.cmd);
+			return word_slice(s) ? WF_ES_REDRAW : WF_ES_NONE;
+		}
 		wf_ed_move(&b->ed, MOVES[a.cmd - WF_CMD_LEFT], a.extend,
 		        page_of(s));
 		return WF_ES_REDRAW;
@@ -2370,6 +2423,9 @@ uint32_t wf_es_timeout(const WfEditSession *s, uint64_t now_ms)
 	if (!s) {
 		return t;
 	}
+	if (s->motion.active) {
+		return 0;
+	}
 	if (wf_keystate_active(&s->ks)) {
 		t = now_ms >= s->ks.deadline
 		        ? 0
@@ -2418,7 +2474,8 @@ bool wf_es_tick(WfEditSession *s, uint64_t now_ms)
 		return false;
 	}
 	s->now_ms = now_ms;
-	redraw = wf_es_md_tick(s, now_ms);
+	redraw = word_slice(s);
+	redraw |= wf_es_md_tick(s, now_ms);
 	redraw |= wf_es_git_tick(s, now_ms);
 	if (!wf_keystate_active(&s->ks) || now_ms < s->ks.deadline) {
 		return redraw;
@@ -2617,6 +2674,15 @@ WfEsResult wf_es_event(WfEditSession *s, const WfEvent *ev, int rows, int cols)
 	        (WF_EV_KEY == ev->type || WF_EV_CHAR == ev->type);
 	WfEsResult res;
 
+	/* The terminal loop defers type-ahead. Macro playback and other direct
+	 * callers can submit an event immediately, so finish its preceding
+	 * motion before applying text or commands at the cursor. Resize/release
+	 * do not change the editing model and may be handled between slices. */
+	if (WF_EV_RESIZE != ev->type && WF_EV_RELEASE != ev->type) {
+		while (s->motion.active) {
+			(void)word_slice(s);
+		}
+	}
 	if (vim) { /* a macro takes every key, the answers to prompts too */
 		wf_vim_record(s, ev);
 		wf_vim_dot_before(s, ev);

@@ -366,6 +366,9 @@ static uint32_t cp_at(const WfELine *l, size_t col)
 	uint32_t cp = 0;
 
 	if (col < l->len) {
+		if ((unsigned char)l->s[col] < 0x80) {
+			return (unsigned char)l->s[col];
+		}
 		(void)wf_utf8_decode(l->s + col, l->len - col, &cp);
 	}
 	return cp;
@@ -385,50 +388,155 @@ static uint32_t cp_before(const WfELine *l, size_t col)
 	return cp_at(l, p);
 }
 
-static void word_left(WfEditor *e)
+void wf_ed_word_scan_begin(WfWordScan *scan, size_t col, bool right)
 {
-	const WfELine *l = &e->text.lines[e->cur.line];
-
-	if (0 == e->cur.col) {
-		if (e->cur.line > 0) {
-			e->cur.line--;
-			e->cur.col = e->text.lines[e->cur.line].len;
-		}
-		return;
-	}
-	while (e->cur.col > 0 && 0 == cls(cp_before(l, e->cur.col))) {
-		e->cur.col = wf_et_col_prev(l, e->cur.col);
-	}
-	if (e->cur.col > 0) {
-		int k = cls(cp_before(l, e->cur.col));
-
-		while (e->cur.col > 0 && cls(cp_before(l, e->cur.col)) == k) {
-			e->cur.col = wf_et_col_prev(l, e->cur.col);
-		}
-	}
+	*scan = (WfWordScan){.col = col, .kind = -1, .right = right};
 }
 
-static void word_right(WfEditor *e)
+static bool word_combining(uint32_t cp)
+{
+	return cp >= 0x80 &&
+	        (0 == wf_cp_width(cp) || (cp >= 0x1F3FBu && cp <= 0x1F3FFu));
+}
+
+bool wf_ed_word_scan_step(const WfELine *l, WfWordScan *s, size_t budget)
+{
+	while (budget) {
+		size_t before = s->col, next;
+		uint32_t cp;
+		int k;
+
+		if (s->cluster) {
+			if (s->right) {
+				if (s->col == l->len ||
+				        !word_combining(cp_at(l, s->col))) {
+					s->cluster = false;
+					continue;
+				}
+				s->col += wf_utf8_decode(
+				        l->s + s->col, l->len - s->col, &cp);
+			} else {
+				if (!s->col) {
+					s->cluster = false;
+					continue;
+				}
+				next = s->col - 1;
+				while (next &&
+				        0x80 ==
+				                ((unsigned char)l->s[next] &
+				                        0xC0)) {
+					next--;
+				}
+				cp = cp_at(l, next);
+				s->col = next;
+				s->cluster = word_combining(cp);
+			}
+		} else {
+			if ((s->right && s->col == l->len) ||
+			        (!s->right && !s->col)) {
+				return true;
+			}
+			k = cls(s->right ? cp_at(l, s->col)
+			                 : cp_before(l, s->col));
+			if (s->right) {
+				if (s->kind < 0) {
+					s->kind = k;
+				}
+				if (!s->phase && (!s->kind || k != s->kind)) {
+					s->phase = 1;
+				}
+				if (s->phase && k) {
+					return true;
+				}
+				/* ASCII has no combining behaviour; when the next byte
+				 * is also ASCII no Unicode width lookup is needed. */
+				if ((unsigned char)l->s[s->col] < 0x80) {
+					do {
+						s->col++;
+					} while (s->col - before < budget &&
+					        s->col < l->len &&
+					        (unsigned char)l->s[s->col] <
+					                0x80 &&
+					        cls((unsigned char)
+					                        l->s[s->col]) ==
+					                k);
+				} else {
+					s->col += wf_utf8_decode(l->s + s->col,
+					        l->len - s->col, &cp);
+				}
+				s->cluster = s->col < l->len &&
+				        (unsigned char)l->s[s->col] >= 0x80;
+			} else {
+				if (!s->phase && k) {
+					s->phase = 1;
+					s->kind = k;
+				}
+				if (s->phase && k != s->kind) {
+					return true;
+				}
+				if ((unsigned char)l->s[s->col - 1] < 0x80) {
+					do {
+						s->col--;
+					} while (before - s->col < budget &&
+					        s->col &&
+					        (unsigned char)l->s[s->col -
+					                1] < 0x80 &&
+					        cls((unsigned char)l->s[s->col -
+					                1]) == k);
+				} else {
+					s->cluster = true;
+					continue;
+				}
+			}
+		}
+		next = s->right ? s->col - before : before - s->col;
+		budget -= next < budget ? next : budget;
+	}
+	return false;
+}
+
+static void word_move(WfEditor *e, bool right)
 {
 	const WfELine *l = &e->text.lines[e->cur.line];
+	WfWordScan scan;
 
-	if (e->cur.col >= l->len) {
+	if (right && e->cur.col >= l->len) {
 		if (e->cur.line + 1 < e->text.n) {
 			e->cur.line++;
 			e->cur.col = 0;
 		}
 		return;
 	}
-	{
-		int k = cls(cp_at(l, e->cur.col));
+	if (!right && !e->cur.col) {
+		if (e->cur.line) {
+			e->cur.line--;
+			e->cur.col = e->text.lines[e->cur.line].len;
+		}
+		return;
+	}
+	wf_ed_word_scan_begin(&scan, e->cur.col, right);
+	while (!wf_ed_word_scan_step(l, &scan, SIZE_MAX)) {
+	}
+	e->cur.col = scan.col;
+}
 
-		while (e->cur.col < l->len && cls(cp_at(l, e->cur.col)) == k &&
-		        0 != k) {
-			e->cur.col = wf_et_col_next(l, e->cur.col);
-		}
-		while (e->cur.col < l->len && 0 == cls(cp_at(l, e->cur.col))) {
-			e->cur.col = wf_et_col_next(l, e->cur.col);
-		}
+void wf_ed_move_to(WfEditor *e, WfPos to, bool extend)
+{
+	if (!wf_et_valid(&e->text, to)) {
+		return;
+	}
+	extend = extend || e->mark;
+	if (extend && !e->has_anchor) {
+		e->anchor = e->cur;
+		e->has_anchor = true;
+	}
+	if (!extend) {
+		wf_ed_clear_selection(e);
+	}
+	e->cur = to;
+	e->want_valid = false;
+	if (e->has_anchor && !e->mark && !wf_pos_cmp(e->anchor, e->cur)) {
+		e->has_anchor = false;
 	}
 }
 
@@ -659,8 +767,8 @@ void wf_ed_move(WfEditor *e, WfMove m, bool extend, size_t page)
 	case WF_MV_LINE_END:   e->cur.col = l->len; break;
 	case WF_MV_DOC_START:  e->cur.line = e->cur.col = 0; break;
 	case WF_MV_DOC_END:    e->cur = wf_et_end(&e->text); break;
-	case WF_MV_WORD_LEFT:  word_left(e); break;
-	case WF_MV_WORD_RIGHT: word_right(e); break;
+	case WF_MV_WORD_LEFT:  word_move(e, false); break;
+	case WF_MV_WORD_RIGHT: word_move(e, true); break;
 	}
 	if (!vertical) {
 		e->want_valid = false;
