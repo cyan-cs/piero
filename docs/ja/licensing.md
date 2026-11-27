@@ -37,20 +37,66 @@ Leftで項目の一覧へ戻ります。Escで設定から戻ります。
 
 libarchiveには、ファイルごとのBSDやパブリックドメインの表記と、全体をまとめたCOPYINGがあります。
 zlibはzlibライセンス、liblzmaライブラリは0BSD、zstdはBSDとGPLから選べ、
-配布用にはBSDの通知を残しています。同梱しているxzのツリーには、別の条件のツールやビルド用ファイルも
+配布用にはBSDの通知を残しています。上流のxz配布一式には、別の条件のツールやビルド用ファイルも
 含まれるので、ツリー全体を0BSDと書かないでください。ソース一式を公開するときは、
 上流の通知をすべて残す必要があります。`cmake/product.cmake`は、チェックアウトの`LICENSES/`を
 製品の横へコピーします。
 
-## まだ確認が必要なこと
+## 通知の網羅性を確認する
 
-配布する前に、コンパイルする各ソースの個別の通知と出どころを確認してください。部品の一覧は
-法務監査の代わりにはなりません。libarchiveのまとめた通知が、選んだファイルの全体を含んでいることを確認し、
-更新するときも上流の通知を残してください。ASan/compiler-rtは開発専用なので、通常のパッケージに入れないでください。
+配布用の通知には、コンパイルされる外部ソースとヘッダーの個別の著作権・ライセンス表記も収録しています。
+libarchive内部の借用コードも対象です。Tree-sitterの通知には同梱ICU/Unicodeヘッダーのライセンス全文を含めています。
+ZstandardはBSDライセンスを選択しています。
+
+ビルド後に次のコマンドで確認できます。
+
+```powershell
+python tools/audit_licenses.py out/cr --output out/license-review.json --check-notices
+```
+
+CTestの`license_notices`も同じ確認を実行します。C翻訳単位とNinjaが記録した実際の依存ヘッダーを調べ、
+上流のライセンス本文を照合し、未登録の外部コンポーネントを拒否します。通知だけを変更した場合も、
+既存ビルドの製品の横へコピーし直します。ZIPとインストーラーのペイロードには通知をそのまま含めます。
+ASan/compiler-rtは開発専用なので、通常のパッケージに入れないでください。
+
+これは通知の網羅性の確認であり、権利の帰属やソースの出どころ、上流のすべての利用条件を保証するものではありません。
+依存関係の更新時には条件や来歴を確認してください。新しいコメントを通知へコピーするだけでは法務確認になりません。
+
+## Unicodeデータの指摘を解決（2026-11-27）
+
+元のlibarchive 3.8.10の`archive_string_composition.h`はUnicodeData 6.0.0から生成されていましたが、
+表記はlibarchiveの通知だけでした。上流でも[issue #3817](https://github.com/libarchive/libarchive/issues/3817)で
+Unicodeの通知漏れが指摘され、[PR #3848](https://github.com/libarchive/libarchive/pull/3848)でデータ更新と
+ライセンス追加により解決しています。今回、ヘッダーの両方の変更を取り込み、適用結果のGitハッシュが
+上流パッチと一致することを確認しました。その後、末尾の余分な空行だけを除去しています。
+現在のテーブルはUnicodeData 18.0.0由来で、Unicode License v3を含みます。
+バイナリー配布用の`LICENSES/libarchive-3.8.10.txt`にも通知全文を収録しています。
+
+2026-11-27の取り込みの来歴は、外部ソースの`PIERO-LICENSING.md`に記録しています。
+回帰テスト`archive_unicode`は実際にリンクしたライブラリのNFC/NFD変換を使い、6.0以降の文字、日本語、
+結合文字、ハングル、合成除外を確認します。通知チェックでも、Unicode通知のない旧データへの差し戻しを検出します。
+これで既知の通知漏れは解決しています。ただし、上流自体にない条件を自動検査で発見できるわけではありません。
 
 [MITライセンス本文](https://opensource.org/license/mit)
 
-## Tree-sitterと文法
+## データとソース配布の追加確認
+
+`src/text/wf_width.c`と`src/text/wf_width_ambiguous.h`のUnicode 15.0.0文字幅範囲は、
+Pythonの`unicodedata`経由のデータも含む、文字データを加工した表現です。Python処理系のコードは含みません。
+`LICENSES/unicode-data.txt`にデータの通知、許諾本文、出典を保持し、生成スクリプトもその通知への参照を出力します。
+
+ソースツリーにはlibarchiveのGNU Autoconf/Libtool補助ファイルも残っています。
+各ファイルのGPL通知と例外は保持し、その外部ソースのディレクトリーへGPLの全文を追加しています。
+これらはWindows製品へ組み込まず、パッケージにも含めません。ソース全体をMIT、libarchive全体をBSDと
+説明しないでください。ルートのMITはプロジェクト所有の部分に適用されます。
+
+ポータブル版は静的CRTを使い、確認済みWindowsシステムDLLだけをインポートします。
+Python、LLVM、CMake、Ninjaはビルド用で、プログラムを同梱しません。
+インストーラーにはInno Setupのエンジンも含まれるため、
+[Inno Setupのライセンス](https://jrsoftware.org/files/is/license.txt)に従い、既存の著作権表記とWebアドレスを保持します。
+この環境にはインストーラーのコンパイラーがなく、実際のインストーラーバイナリーは未確認です。
+
+## 文法ソース
 
 Tree-sitterの実行環境(MIT)と、任意の`syntax`フォルダーのためにpieroがビルドする文法(json、jsonc、yaml、toml、ini、
 xml、markdown、powershell、bash。iniだけがApache-2.0で、ほかはMIT)は、ソースツリーに取り込んであり、通知は

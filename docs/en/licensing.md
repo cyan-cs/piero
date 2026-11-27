@@ -39,22 +39,79 @@ license and those notices in distributions; embedding MIT does not remove them.
 
 libarchive has per-file BSD/public-domain notices and an aggregate COPYING;
 zlib uses its zlib license; liblzma library uses 0BSD; zstd offers BSD/GPL
-alternatives and the distribution carries its BSD notice. The vendored xz
-tree also contains tools/build files with separate terms: do not describe the
+alternatives and the distribution carries its BSD notice. The upstream xz
+distribution also contains tools/build files with separate terms: do not describe the
 entire tree as 0BSD. Full source publication must retain all upstream notices.
 `cmake/product.cmake` copies the checkout's `LICENSES/` beside the product.
 
-## Remaining checks
+## Notice coverage checks
 
-Review every compiled source's individual notice and source provenance before
-distribution; a component inventory is not a complete legal audit. Confirm
-the aggregate libarchive notice covers all selected files and preserve upstream
-notices when updating. ASan/compiler-rt is development-only and must not enter
+The distribution notices also reproduce the individual copyright and license
+comments in the compiled vendor sources and headers, including inline borrowed
+code inside libarchive. Tree-sitter's notice includes the complete license of
+its bundled ICU/Unicode headers. Zstandard uses its BSD license option.
+
+After building, run:
+
+```powershell
+python tools/audit_licenses.py out/cr --output out/license-review.json --check-notices
+```
+
+The `license_notices` CTest runs the same check. It follows Ninja's actual header
+dependencies as well as its C translation units, checks the upstream license
+texts, and rejects unknown vendor components. License-only changes refresh the
+notices beside an existing product build. ZIP and installer payloads retain the
+notices without changes. ASan/compiler-rt is development-only and must not enter
 the normal package.
+
+This is a check of notice coverage, not proof of ownership, source provenance,
+or every upstream licensing condition. Review changed terms and provenance when
+updating dependencies; copying a new comment into a notice is not legal review.
+
+## Unicode data finding resolved (2026-11-27)
+
+The original libarchive 3.8.10 `archive_string_composition.h` was generated
+from UnicodeData 6.0.0 and carried only the libarchive notice. Upstream identified
+the missing Unicode notice in [issue #3817](https://github.com/libarchive/libarchive/issues/3817)
+and resolved it by updating the data and adding its license in
+[PR #3848](https://github.com/libarchive/libarchive/pull/3848). Both header changes
+have now been backported: the resulting Git blob matched the upstream patch,
+then only the redundant final blank line was removed. The table now uses
+UnicodeData 18.0.0 and includes Unicode License v3. Its entire notice is also
+included in `LICENSES/libarchive-3.8.10.txt` for binary distribution.
+
+The 2026-11-27 backport provenance is recorded in the vendor directory's
+`PIERO-LICENSING.md`. The `archive_unicode` regression exercises actual linked
+NFC/NFD conversion, including post-6.0 characters, Japanese, combining marks,
+Hangul and composition exclusions. The notice check also rejects a rollback to
+the old data without its Unicode notice. This closes the known missing-notice
+finding; automatic checks still cannot discover terms absent from upstream.
 
 [MIT license text](https://opensource.org/license/mit)
 
-## Tree-sitter and grammars
+## Additional data and source-distribution review
+
+The Unicode 15.0.0 width ranges in `src/text/wf_width.c` and
+`src/text/wf_width_ambiguous.h` are modified representations of character data,
+including data queried through Python's `unicodedata`; they do not contain Python
+interpreter code. `LICENSES/unicode-data.txt` retains the data notice, permission
+text and source references. The generator preserves a link to that notice.
+
+The source checkout also contains libarchive's GNU Autoconf/Libtool helpers.
+Their GPL notices and individual exceptions remain in the source; the complete
+GPL texts are supplied in that vendor directory. They are not built into or
+packaged with the Windows product. Do not identify the entire source checkout as
+MIT or describe every libarchive file as BSD. The root MIT applies to
+project-owned material only.
+
+The portable package imports only reviewed Windows system DLLs and uses the
+static CRT. Python, LLVM, CMake and Ninja are build tools, not bundled programs.
+An installer additionally contains the Inno Setup engine: retain its existing
+copyright notices and website addresses as required by the
+[Inno Setup license](https://jrsoftware.org/files/is/license.txt). This environment
+has no installer compiler, so an actual installer binary has not been checked.
+
+## Grammar sources
 
 The Tree-sitter runtime (MIT) and the grammars piero builds into the optional `syntax`
 folder (json, jsonc, yaml, toml, ini, xml, markdown, powershell, bash; MIT except ini, which is Apache-2.0) are

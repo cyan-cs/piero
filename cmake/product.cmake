@@ -377,7 +377,11 @@ add_custom_command(TARGET piero POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/LICENSE" "$<TARGET_FILE_DIR:piero>/LICENSE"
   VERBATIM)
-set_property(TARGET piero APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/LICENSE")
+# A notice-only change must refresh the files beside an existing executable,
+# too; POST_BUILD alone would otherwise leave stale third-party legal text.
+file(GLOB WF_DISTRIBUTION_LICENSE_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/LICENSES/*.txt")
+set_property(TARGET piero APPEND PROPERTY LINK_DEPENDS
+  "${CMAKE_SOURCE_DIR}/LICENSE" ${WF_DISTRIBUTION_LICENSE_FILES})
 if(WF_SANITIZE)
   wf_prepare_sanitizer_runtime()
   wf_use_sanitizer_runtime(piero)

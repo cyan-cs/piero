@@ -28,3 +28,197 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The BSD license option is used for Zstandard in this distribution.
+
+Additional upstream source/header notices
+Reproduced verbatim, including the upstream comment delimiters.
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/allocations.h
+src/third_party/zstd-1.5.7/lib/common/bits.h
+src/third_party/zstd-1.5.7/lib/common/compiler.h
+src/third_party/zstd-1.5.7/lib/common/cpu.h
+src/third_party/zstd-1.5.7/lib/common/error_private.c
+src/third_party/zstd-1.5.7/lib/common/error_private.h
+src/third_party/zstd-1.5.7/lib/common/mem.h
+src/third_party/zstd-1.5.7/lib/common/portability_macros.h
+src/third_party/zstd-1.5.7/lib/common/zstd_common.c
+src/third_party/zstd-1.5.7/lib/common/zstd_deps.h
+src/third_party/zstd-1.5.7/lib/common/zstd_internal.h
+src/third_party/zstd-1.5.7/lib/common/zstd_trace.h
+src/third_party/zstd-1.5.7/lib/decompress/zstd_ddict.c
+src/third_party/zstd-1.5.7/lib/decompress/zstd_ddict.h
+src/third_party/zstd-1.5.7/lib/decompress/zstd_decompress.c
+src/third_party/zstd-1.5.7/lib/decompress/zstd_decompress_block.c
+src/third_party/zstd-1.5.7/lib/decompress/zstd_decompress_block.h
+src/third_party/zstd-1.5.7/lib/decompress/zstd_decompress_internal.h
+src/third_party/zstd-1.5.7/lib/zstd.h
+src/third_party/zstd-1.5.7/lib/zstd_errors.h
+==============================================================================
+
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/bitstream.h
+==============================================================================
+
+/* ******************************************************************
+ * bitstream
+ * Part of FSE library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/debug.c
+src/third_party/zstd-1.5.7/lib/common/debug.h
+==============================================================================
+
+/* ******************************************************************
+ * debug
+ * Part of FSE library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/entropy_common.c
+==============================================================================
+
+/* ******************************************************************
+ * Common functions of New Generation Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE+HUF source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/fse.h
+==============================================================================
+
+/* ******************************************************************
+ * FSE : Finite State Entropy codec
+ * Public Prototypes declaration
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/fse_decompress.c
+==============================================================================
+
+/* ******************************************************************
+ * FSE : Finite State Entropy decoder
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/huf.h
+==============================================================================
+
+/* ******************************************************************
+ * huff0 huffman codec,
+ * part of Finite State Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/xxhash.c
+==============================================================================
+
+/*
+ * xxHash - Extremely Fast Hash algorithm
+ * Copyright (c) Yann Collet - Meta Platforms, Inc
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/common/xxhash.h
+==============================================================================
+
+/*
+ * xxHash - Extremely Fast Hash algorithm
+ * Header File
+ * Copyright (c) Yann Collet - Meta Platforms, Inc
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+==============================================================================
+src/third_party/zstd-1.5.7/lib/decompress/huf_decompress.c
+==============================================================================
+
+/* ******************************************************************
+ * huff0 huffman decoder,
+ * part of Finite State Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE+HUF source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */

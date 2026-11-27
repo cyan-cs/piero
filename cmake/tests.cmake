@@ -260,11 +260,15 @@ target_link_libraries(test_process_facts PRIVATE wfcore advapi32 user32)
 target_include_directories(test_process_facts PRIVATE tests)
 add_test(NAME process_facts COMMAND test_process_facts)
 set_tests_properties(process_facts PROPERTIES TIMEOUT 20)
-foreach(name git_resolver license_checkout)
+foreach(name git_resolver license_checkout license_audit)
   add_test(NAME ${name} COMMAND "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/tests/test_${name}.py")
   set_tests_properties(${name} PROPERTIES TIMEOUT 45 LABELS non-destructive)
 endforeach()
+add_test(NAME license_notices COMMAND "${Python3_EXECUTABLE}"
+  "${PROJECT_SOURCE_DIR}/tools/audit_licenses.py" "${PROJECT_BINARY_DIR}"
+  --output "${PROJECT_BINARY_DIR}/license-notice-audit.json" --check-notices)
+set_tests_properties(license_notices PROPERTIES TIMEOUT 60 LABELS non-destructive)
 add_executable(test_diag_format tests/test_diag_format.c)
 target_link_libraries(test_diag_format PRIVATE wfstorage)
 target_include_directories(test_diag_format PRIVATE tests)
@@ -716,6 +720,11 @@ add_test(NAME candworker_win COMMAND test_candworker_win)
 set_tests_properties(candworker_win PROPERTIES TIMEOUT 120)
 
 # Reading archives (ZIP, 7z, TAR, single compressed files) on libarchive.
+add_executable(test_archive_unicode tests/test_archive_unicode.c)
+target_link_libraries(test_archive_unicode PRIVATE wf_libarchive)
+target_include_directories(test_archive_unicode PRIVATE tests)
+add_test(NAME archive_unicode COMMAND test_archive_unicode)
+set_tests_properties(archive_unicode PROPERTIES TIMEOUT 15 LABELS "non-destructive")
 add_executable(test_archive tests/test_archive.c)
 add_executable(test_archive_metadata tests/test_archive_metadata.c)
 target_link_libraries(test_archive_metadata PRIVATE wfarchive)

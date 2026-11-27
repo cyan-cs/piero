@@ -9,3 +9,156 @@ CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
 NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Additional upstream source/header notices
+Reproduced verbatim, including the upstream comment delimiters.
+
+==============================================================================
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/base.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/bcj.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/block.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/check.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/container.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/delta.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/filter.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/hardware.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/index.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/index_hash.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/lzma12.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/stream_flags.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/version.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma/vli.h
+src/third_party/xz-5.8.1/src/liblzma/api/lzma.h
+==============================================================================
+
+/* SPDX-License-Identifier: 0BSD */
+
+Additional upstream source/header notices
+Reproduced verbatim, including the upstream comment delimiters.
+
+==============================================================================
+src/third_party/xz-5.8.1/src/common/mythread.h
+src/third_party/xz-5.8.1/src/common/sysdefs.h
+src/third_party/xz-5.8.1/src/common/tuklib_common.h
+src/third_party/xz-5.8.1/src/common/tuklib_config.h
+src/third_party/xz-5.8.1/src/common/tuklib_integer.h
+src/third_party/xz-5.8.1/src/liblzma/check/check.c
+src/third_party/xz-5.8.1/src/liblzma/check/check.h
+src/third_party/xz-5.8.1/src/liblzma/check/crc32_fast.c
+src/third_party/xz-5.8.1/src/liblzma/check/crc32_table_le.h
+src/third_party/xz-5.8.1/src/liblzma/check/crc64_fast.c
+src/third_party/xz-5.8.1/src/liblzma/check/crc64_table_le.h
+src/third_party/xz-5.8.1/src/liblzma/check/crc_common.h
+src/third_party/xz-5.8.1/src/liblzma/check/sha256.c
+src/third_party/xz-5.8.1/src/liblzma/common/alone_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/alone_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/auto_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/block_buffer_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/block_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/block_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/block_header_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/block_util.c
+src/third_party/xz-5.8.1/src/liblzma/common/common.c
+src/third_party/xz-5.8.1/src/liblzma/common/common.h
+src/third_party/xz-5.8.1/src/liblzma/common/easy_decoder_memusage.c
+src/third_party/xz-5.8.1/src/liblzma/common/easy_preset.c
+src/third_party/xz-5.8.1/src/liblzma/common/easy_preset.h
+src/third_party/xz-5.8.1/src/liblzma/common/file_info.c
+src/third_party/xz-5.8.1/src/liblzma/common/filter_buffer_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/filter_common.c
+src/third_party/xz-5.8.1/src/liblzma/common/filter_common.h
+src/third_party/xz-5.8.1/src/liblzma/common/filter_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/filter_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/filter_flags_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/index.c
+src/third_party/xz-5.8.1/src/liblzma/common/index.h
+src/third_party/xz-5.8.1/src/liblzma/common/index_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/index_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/index_hash.c
+src/third_party/xz-5.8.1/src/liblzma/common/lzip_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/lzip_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/microlzma_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/stream_buffer_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/stream_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/stream_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/common/stream_flags_common.c
+src/third_party/xz-5.8.1/src/liblzma/common/stream_flags_common.h
+src/third_party/xz-5.8.1/src/liblzma/common/stream_flags_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/vli_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/common/vli_size.c
+src/third_party/xz-5.8.1/src/liblzma/delta/delta_common.c
+src/third_party/xz-5.8.1/src/liblzma/delta/delta_common.h
+src/third_party/xz-5.8.1/src/liblzma/delta/delta_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/delta/delta_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/delta/delta_private.h
+src/third_party/xz-5.8.1/src/liblzma/lz/lz_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/lz/lz_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma2_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma2_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma_common.h
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/lzma/lzma_encoder_presets.c
+src/third_party/xz-5.8.1/src/liblzma/rangecoder/range_common.h
+src/third_party/xz-5.8.1/src/liblzma/rangecoder/range_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/simple/arm.c
+src/third_party/xz-5.8.1/src/liblzma/simple/arm64.c
+src/third_party/xz-5.8.1/src/liblzma/simple/armthumb.c
+src/third_party/xz-5.8.1/src/liblzma/simple/ia64.c
+src/third_party/xz-5.8.1/src/liblzma/simple/powerpc.c
+src/third_party/xz-5.8.1/src/liblzma/simple/riscv.c
+src/third_party/xz-5.8.1/src/liblzma/simple/simple_coder.c
+src/third_party/xz-5.8.1/src/liblzma/simple/simple_coder.h
+src/third_party/xz-5.8.1/src/liblzma/simple/simple_decoder.c
+src/third_party/xz-5.8.1/src/liblzma/simple/simple_decoder.h
+src/third_party/xz-5.8.1/src/liblzma/simple/simple_private.h
+src/third_party/xz-5.8.1/src/liblzma/simple/sparc.c
+src/third_party/xz-5.8.1/src/liblzma/simple/x86.c
+==============================================================================
+
+// SPDX-License-Identifier: 0BSD
+
+==============================================================================
+src/third_party/xz-5.8.1/src/liblzma/api/lzma.h
+==============================================================================
+
+/**
+ * \file        api/lzma.h
+ * \brief       The public API of liblzma data compression library
+ * \mainpage
+ *
+ * liblzma is a general-purpose data compression library with a zlib-like API.
+ * The native file format is .xz, but also the old .lzma format and raw (no
+ * headers) streams are supported. Multiple compression algorithms (filters)
+ * are supported. Currently LZMA2 is the primary filter.
+ *
+ * liblzma is part of XZ Utils <https://tukaani.org/xz/>. XZ Utils
+ * includes a gzip-like command line tool named xz and some other tools.
+ * XZ Utils is developed and maintained by Lasse Collin.
+ *
+ * Major parts of liblzma are based on code written by Igor Pavlov,
+ * specifically the LZMA SDK <https://7-zip.org/sdk.html>.
+ *
+ * The SHA-256 implementation in liblzma is based on code written by
+ * Wei Dai in Crypto++ Library <https://www.cryptopp.com/>.
+ *
+ * liblzma is distributed under the BSD Zero Clause License (0BSD).
+ */
+
+==============================================================================
+src/third_party/xz-5.8.1/src/liblzma/check/sha256.c
+==============================================================================
+
+///////////////////////////////////////////////////////////////////////////////
+//
+/// \file       sha256.c
+/// \brief      SHA-256
+//
+//  The C code is based on the public domain SHA-256 code found from
+//  Crypto++ Library 5.5.1 released in 2007: https://www.cryptopp.com/
+//  A few minor tweaks have been made in liblzma.
+//
+//  Authors:    Wei Dai
+//              Lasse Collin
+//
+///////////////////////////////////////////////////////////////////////////////

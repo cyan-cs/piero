@@ -2,6 +2,8 @@
 #include "../base/wf_macro.h"
 #include <string.h>
 
+/* Selected/combined Unicode width ranges; see LICENSES/unicode-data.txt. */
+
 typedef struct
 {
 	uint32_t lo, hi;
