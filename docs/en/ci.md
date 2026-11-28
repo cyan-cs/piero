@@ -100,14 +100,27 @@ No known failure becomes a warning or ignored exit. Hosted-runner and
 AppContainer behavior remain unverified until the workflow actually runs.
 
 The validation helper's optional `-JUnit` writes local raw CTest XML. The collector
-exports only test identifiers, verdicts, durations, counts and a blocked release
-status. It never exports output, failure messages, commands, properties or paths.
+exports test identifiers, verdicts, durations, counts and a blocked release status.
+For failed ConPTY tests it also preserves up to 32 strictly parsed diagnostic
+records: fixed allowlisted check identifiers, NOT RUN dependent steps, and numeric
+wait/write counters with an enumerated failure reason and Win32 error code.
+It never exports raw output, failure messages, commands, properties or paths.
 Absent/invalid/empty reports fail collection and cannot masquerade as success.
 Only `out/ci/ci-results.json` or `out/san/ci-results.json` is uploaded, including
 failure summaries. Names distinguish compiler/configuration and run attempt;
 retention is 7 days, hidden files are excluded and missing uploads fail.
 Cancellation or runner loss can still prevent artifact delivery. Raw diagnostics
 stay out of artifacts; review Actions logs privately before sharing them.
+
+ConPTY search scenarios wait for the filter mode and the rendered query plus READY state
+before submitting Tab. A same-folder refresh displays LOADING while retaining the
+old rows; those rows alone do not acknowledge input readiness. Writes validate both
+the Win32 result and byte count, and screen/parser state and output progress are
+sampled under the same lock. The first failed search/duplicate assertion stops dependent operations,
+which are reported NOT RUN. Evidence directory names include the host process ID,
+so rapid repetitions within one second do not collide. Paste and confirmation
+guards remain enabled; explicit clock-based guard/type-ahead tests retain their
+deliberate timing inputs.
 
 ## Verification and owner checks
 

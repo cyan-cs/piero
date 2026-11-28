@@ -329,6 +329,9 @@ typedef struct
 	size_t raw_n, raw_cap;
 	int eof;
 	int capture_failed;
+	DWORD input_error;
+	size_t input_written;
+	ULONGLONG text_sent_at;
 	double started;
 } Pty;
 
@@ -426,30 +429,53 @@ static size_t utf8_unit(unsigned char lead)
 	return lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
 }
 
-static void pty_write(Pty *p, const char *bytes, size_t n)
+static bool pty_write(Pty *p, const char *bytes, size_t n)
 {
-	DWORD wrote;
-
-	WriteFile(p->in_w, bytes, (DWORD)n, &wrote, NULL);
+	if (p->input_error) {
+		return false;
+	}
+	while (n) {
+		DWORD wrote = 0;
+		DWORD chunk = n > MAXDWORD ? MAXDWORD : (DWORD)n;
+		if (!WriteFile(p->in_w, bytes, chunk, &wrote, NULL)) {
+			p->input_error = GetLastError();
+			if (!p->input_error) {
+				p->input_error = ERROR_WRITE_FAULT;
+			}
+		} else if (!wrote || wrote > chunk) {
+			p->input_error = ERROR_WRITE_FAULT;
+		}
+		if (p->input_error) {
+			printf("CONPTY input_write_failed win32=%lu sent=%zu\n",
+			        p->input_error, p->input_written);
+			fflush(stdout);
+			return false;
+		}
+		p->input_written += wrote;
+		bytes += wrote;
+		n -= wrote;
+	}
+	return true;
 }
 
 static double pty_send(Pty *p, const char *bytes, size_t n)
 {
 	double t = now_ms();
-	static ULONGLONG text_sent_at; /* GetTickCount64 of the last text */
 	const char cr = 13;
 	size_t i = 0;
 
 	if (n <= 1 || memchr(bytes, 0x1b, n)) {
-		if (n >= 1 && cr == bytes[0] && text_sent_at) {
-			ULONGLONG ago = GetTickCount64() - text_sent_at;
+		if (n >= 1 && cr == bytes[0] && p->text_sent_at) {
+			ULONGLONG ago = GetTickCount64() - p->text_sent_at;
 
 			if (ago < TYPED_ENTER_GAP_MS) {
 				Sleep((DWORD)(TYPED_ENTER_GAP_MS - ago));
 			}
 		}
-		pty_write(p, bytes, n);
-		text_sent_at = n && (unsigned char)bytes[0] >= 0x20
+		if (!pty_write(p, bytes, n)) {
+			return t;
+		}
+		p->text_sent_at = n && (unsigned char)bytes[0] >= 0x20
 		        ? GetTickCount64()
 		        : 0;
 		return t;
@@ -458,8 +484,8 @@ static double pty_send(Pty *p, const char *bytes, size_t n)
 		size_t end = i, units = 0;
 		bool is_cr = cr == bytes[i];
 
-		if (is_cr && text_sent_at) {
-			ULONGLONG ago = GetTickCount64() - text_sent_at;
+		if (is_cr && p->text_sent_at) {
+			ULONGLONG ago = GetTickCount64() - p->text_sent_at;
 
 			if (ago < TYPED_ENTER_GAP_MS) {
 				Sleep((DWORD)(TYPED_ENTER_GAP_MS - ago));
@@ -478,8 +504,10 @@ static double pty_send(Pty *p, const char *bytes, size_t n)
 				end = n;
 			}
 		}
-		pty_write(p, bytes + i, end - i);
-		text_sent_at =
+		if (!pty_write(p, bytes + i, end - i)) {
+			return t;
+		}
+		p->text_sent_at =
 		        (unsigned char)bytes[i] >= 0x20 ? GetTickCount64() : 0;
 		i = end;
 		if (i < n) {
@@ -699,7 +727,8 @@ static int ev_open(Ev *e,
 	p0_utc_compact(ts);
 	WideCharToMultiByte(
 	        CP_UTF8, 0, label, -1, label8, sizeof label8, NULL, NULL);
-	snprintf(e->run_id, sizeof e->run_id, "%s-%s-%s", ts, scenario, label8);
+	snprintf(e->run_id, sizeof e->run_id, "%s-%lu-%.24s-%.16s", ts,
+	        GetCurrentProcessId(), scenario, label8);
 	swprintf(e->dir, MAX_PATH * 2, L"%ls\\%hs\\%hs", root, test, e->run_id);
 	swprintf(p, MAX_PATH * 2, L"%ls\\%hs", root, test);
 	if (!p0_mkdirs(p) || !CreateDirectoryW(e->dir, NULL)) {
@@ -743,6 +772,15 @@ static void ev_check(Ev *e,
 		printf("FAIL check=%s rep=%d\n", check, rep);
 		fflush(stdout);
 	}
+}
+
+static void ev_not_run(Ev *e)
+{
+	fputs("dependent_checks,0,\"prerequisites passed\",\"not "
+	      "executed\",NOT RUN\n",
+	        e->results);
+	fflush(e->results);
+	puts("NOT RUN check=dependent_checks reason=prerequisite_failed");
 }
 
 static void ev_write_text(const Ev *e, const wchar_t *rel, const char *text)
@@ -810,13 +848,25 @@ static int product_wait_ms(
 {
 	ULONGLONG deadline = GetTickCount64() + ms;
 	ULONGLONG stable_since = GetTickCount64();
+	ULONGLONG started = stable_since;
+	const char *reason = "timeout";
+	size_t bytes = 0;
+	int parser = 0;
 	size_t previous = SIZE_MAX;
 	do {
-		size_t bytes;
-		pty_snapshot(p, screen, cap);
+		bool complete;
+		int failed;
 		EnterCriticalSection(&p->lock);
+		screen_text(&p->scr, screen, cap);
 		bytes = p->raw_n;
+		parser = p->scr.state;
+		complete = !p->scr.state && !p->scr.u8need;
+		failed = p->capture_failed;
 		LeaveCriticalSection(&p->lock);
+		if (p->input_error || failed) {
+			reason = p->input_error ? "input_write" : "capture";
+			break;
+		}
 		if (bytes != previous) {
 			previous = bytes;
 			stable_since = GetTickCount64();
@@ -824,15 +874,21 @@ static int product_wait_ms(
 		/* A substring in a partial VT frame can still belong to the old
 		 * mode. Wait for output quiescence before injecting the next
 		 * command. */
-		if (strstr(screen, needle) &&
+		if (WAIT_OBJECT_0 == WaitForSingleObject(p->pi.hProcess, 0)) {
+			reason = "child_exit";
+			break;
+		}
+		if (complete && strstr(screen, needle) &&
 		        GetTickCount64() - stable_since >= 60) {
 			return 1;
 		}
-		if (WAIT_OBJECT_0 == WaitForSingleObject(p->pi.hProcess, 0)) {
-			break;
-		}
 		Sleep(10);
 	} while (GetTickCount64() < deadline);
+	printf("CONPTY wait_failed reason=%s elapsed_ms=%llu input_bytes=%zu "
+	       "output_bytes=%zu parser=%d win32=%lu\n",
+	        reason, (unsigned long long)(GetTickCount64() - started),
+	        p->input_written, bytes, parser, p->input_error);
+	fflush(stdout);
 	return 0;
 }
 

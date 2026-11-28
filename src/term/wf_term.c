@@ -297,10 +297,6 @@ WfStatus wf_term_set_editing(WfTerm *t, bool on)
 		return WF_E_OS;
 	}
 	t->editing = on;
-	t->nkept = 0;
-	t->rep_left = 0;
-	t->npend = 0;
-	t->pending_high = 0;
 	return WF_OK;
 }
 
@@ -311,10 +307,6 @@ WfStatus wf_term_set_modified_keys(WfTerm *t, bool on)
 	}
 	if (t->modified != on) {
 		t->modified = on;
-		t->nkept = 0;
-		t->rep_left = 0;
-		t->npend = 0;
-		t->pending_high = 0;
 	}
 	return WF_OK;
 }
@@ -766,14 +758,22 @@ static size_t take_records(WfTerm *t,
 	return count;
 }
 
+bool wf_term_has_pending_input(const WfTerm *t)
+{
+	return t && (t->nkept || t->rep_left || t->npend);
+}
+
 size_t wf_term_read_events(WfTerm *t, WfEvent *ev, size_t max)
 {
 	INPUT_RECORD rec[64];
 	DWORD avail = 0, got = 0;
 	size_t count = 0, first;
 
-	while (t->nkept > 0 && count < max) {
-		ev[count++] = t->kept[--t->nkept];
+	if (t->nkept && max) {
+		count = t->nkept < max ? t->nkept : max;
+		memcpy(ev, t->kept, count * sizeof *ev);
+		t->nkept -= count;
+		memmove(t->kept, t->kept + count, t->nkept * sizeof *t->kept);
 	}
 	first = count;
 	if (t->rep_left || t->npend) {
@@ -802,12 +802,24 @@ size_t wf_term_read_events(WfTerm *t, WfEvent *ev, size_t max)
 	return count;
 }
 
+static void keep_releases(WfTerm *t, const INPUT_RECORD *rec, size_t n)
+{
+	for (size_t i = 0; i < n; i++) {
+		WfEvent e = {WF_EV_CHAR, 0, WF_KEY_NONE, 0};
+		if (translate(t, &rec[i], &e) && WF_EV_RELEASE == e.type &&
+		        t->nkept < WF_ARRAY_LEN(t->kept)) {
+			t->kept[t->nkept++] = e;
+		}
+	}
+}
+
 void wf_term_drain_input(WfTerm *t)
 {
 	INPUT_RECORD rec[64];
-	DWORD avail = 0, got = 0, i;
+	DWORD avail = 0, got = 0;
 
 	t->rep_left = 0; /* what was held back is queued input too */
+	keep_releases(t, t->pend, t->npend);
 	t->npend = 0;
 	while (GetNumberOfConsoleInputEvents(t->in, &avail) && avail > 0) {
 		if (avail > 64) {
@@ -816,14 +828,6 @@ void wf_term_drain_input(WfTerm *t)
 		if (!ReadConsoleInputW(t->in, rec, avail, &got) || 0 == got) {
 			return;
 		}
-		for (i = 0; i < got; i++) {
-			WfEvent e = {WF_EV_CHAR, 0, WF_KEY_NONE, 0};
-
-			if (translate(t, &rec[i], &e) &&
-			        WF_EV_RELEASE == e.type &&
-			        t->nkept < WF_ARRAY_LEN(t->kept)) {
-				t->kept[t->nkept++] = e;
-			}
-		}
+		keep_releases(t, rec, got);
 	}
 }

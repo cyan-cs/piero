@@ -49,6 +49,8 @@ WfStatus wf_term_write(WfTerm *t, const char *utf8, size_t n);
 
 /* Drains at most `max` pending input records into `ev`; returns the count. */
 size_t wf_term_read_events(WfTerm *t, WfEvent *ev, size_t max);
+/* Buffered records/repeats need delivery even if the console is not signalled. */
+bool wf_term_has_pending_input(const WfTerm *t);
 
 /*
  * Drops every queued input record except key-ups, which are kept and

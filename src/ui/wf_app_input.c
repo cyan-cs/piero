@@ -1288,7 +1288,9 @@ static void filter_backspace(WfView *v)
 static WfAction filter_event_inner(WfApp *app, const WfEvent *ev)
 {
 	if (WF_EV_CHAR == ev->type) {
-		filter_append(&app->cur, ev->ch);
+		if (filter_append(&app->cur, ev->ch)) {
+			app->msg[0] = '\0';
+		}
 		return WF_ACT_REDRAW;
 	}
 	if (WF_EV_KEY != ev->type) {

@@ -401,6 +401,35 @@ static void batches_grow_the_list_and_stale_ones_are_dropped(void)
 	wf_app_destroy(&r.a);
 }
 
+static void a_same_folder_refresh_is_not_reported_as_ready(void)
+{
+	static Rig r;
+	world();
+	rig_open(&r, true);
+	r.fs.defer = 1;
+	r.a.now_ms = 100;
+	wf_app_refresh(&r.a, false);
+	CHECK(r.a.want_path && r.fs.nq == 1);
+	CHECK(screen_has(&r.a, "LOADING"));
+	CHECK(!screen_has(&r.a, "READY"));
+	ch(&r.a, '/');
+	key(&r.a, WF_KEY_TAB);
+	CHECK(!r.sr.starts);
+	CHECK(strstr(r.a.msg, "still being read"));
+	fake_deliver(&r.fs, 0);
+	CHECK(!r.a.want_path);
+	CHECK(strstr(r.a.msg, "still being read"));
+	ch(&r.a, 'x');
+	CHECK(!r.a.msg[0]);
+	CHECK(screen_has(&r.a, "FILTER READY"));
+	key(&r.a, WF_KEY_TAB);
+	CHECK(r.sr.starts == 1 && r.a.hits.running && !r.a.hits.n);
+	r.a.now_ms += 10000;
+	deliver(&r.a, r.sr.gen, TWO_FOLDERS, 1, true);
+	CHECK(r.a.hits.done && r.a.hits.n == 1);
+	wf_app_destroy(&r.a);
+}
+
 static void the_account_of_what_was_not_done_is_on_the_screen(void)
 {
 	static Rig r;
@@ -1131,6 +1160,7 @@ int main(void)
 {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	tab_in_the_filter_makes_the_query_and_asks_the_worker();
+	a_same_folder_refresh_is_not_reported_as_ready();
 	an_empty_or_wrong_query_asks_for_nothing();
 	batches_grow_the_list_and_stale_ones_are_dropped();
 	the_account_of_what_was_not_done_is_on_the_screen();

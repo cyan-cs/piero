@@ -7,6 +7,61 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
+CONPTY_CHECKS = frozenset({
+    'dependent_checks',
+    'dirsize_changes_no_file',
+    'dirsize_r_forgets_the_totals',
+    'dirsize_rows_start_without_sizes',
+    'dirsize_state_line_says_how_many',
+    'dirsize_totals_are_drawn',
+    'dupes_cancel_changes_nothing',
+    'dupes_copy_is_not_offered',
+    'dupes_ctrl_a_is_not_offered',
+    'dupes_delete_asks_once',
+    'dupes_finds_the_three_equal_files',
+    'dupes_list_is_shown',
+    'dupes_lists_the_group_and_nothing_else',
+    'dupes_the_last_copy_cannot_be_marked',
+    'search_cancel_changes_nothing',
+    'search_copy_of_several_folders_is_refused',
+    'search_delete_asks_once_for_every_folder',
+    'search_empty_query_is_refused',
+    'search_enter_shows_it_in_its_folder',
+    'search_finds_below_the_folder',
+    'search_list_is_shown',
+    'search_rows_show_the_folder_and_the_name',
+    'search_starts_from_the_folder_on_screen',
+    'search_wrong_query_is_refused',
+    'word_motion_typeahead_is_preserved',
+})
+
+
+def conpty_diagnostics(case):
+    records = []
+    for line in (case.findtext('system-out') or '').splitlines():
+        match = re.fullmatch(
+            r'CONPTY wait_failed reason=(timeout|input_write|capture|child_exit) '
+            r'elapsed_ms=([0-9]{1,12}) input_bytes=([0-9]{1,12}) '
+            r'output_bytes=([0-9]{1,12}) parser=([0-4]) win32=([0-9]{1,10})', line)
+        if match:
+            records.append(dict(reason=match[1], elapsed_ms=int(match[2]),
+                                input_bytes=int(match[3]), output_bytes=int(match[4]),
+                                parser=int(match[5]), win32=int(match[6])))
+        else:
+            write = re.fullmatch(r'CONPTY input_write_failed win32=([0-9]{1,10}) '
+                                 r'sent=([0-9]{1,12})', line)
+            if write:
+                records.append(dict(reason='input_write', win32=int(write[1]),
+                                    input_bytes=int(write[2])))
+            match = re.fullmatch(r'(FAIL|NOT RUN) check=([A-Za-z0-9_]{1,96}) '
+                                 r'(?:rep=[0-9]{1,6}|reason=prerequisite_failed)', line)
+            if match and match[2] in CONPTY_CHECKS:
+                records.append(dict(status=match[1], check=match[2]))
+        if len(records) == 32:
+            break
+    return records
+
+
 def summary(path):
     limit = 16 * 1024 * 1024
     with path.open('rb') as stream:
@@ -40,7 +95,12 @@ def summary(path):
             status = 'PASS'
         else:
             raise ValueError('Unknown test status')
-        tests.append(dict(name=name, status=status, seconds=seconds))
+        item = dict(name=name, status=status, seconds=seconds)
+        if status == 'FAIL':
+            diagnostics = conpty_diagnostics(case)
+            if diagnostics:
+                item['diagnostics'] = diagnostics
+        tests.append(item)
     if not tests or len({x['name'] for x in tests}) != len(tests):
         raise ValueError('Empty or ambiguous report')
     if 'tests' in root.attrib and int(root.attrib['tests']) != len(tests):

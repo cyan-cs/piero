@@ -903,8 +903,7 @@ static void status_build(
 	}
 	wf_buf_putc(&part, ' ');
 	wf_buf_puts(&part,
-	        wf_msg(navigating(app) ? MSG_STATUS_LOADING
-	                               : MSG_STATUS_READY));
+	        wf_msg(app->want_path ? MSG_STATUS_LOADING : MSG_STATUS_READY));
 	status_append_if_fit(s, &part, max_cells);
 
 	wf_buf_clear(&part);
@@ -1112,7 +1111,7 @@ static void draw_minimal_status(const WfApp *app, WfFrame *f)
 		return;
 	}
 	const char *state =
-	        wf_msg(navigating(app) ? MSG_STATUS_LOADING : MSG_STATUS_READY);
+	        wf_msg(app->want_path ? MSG_STATUS_LOADING : MSG_STATUS_READY);
 	int state_cells = wf_utf8_cells(state, strlen(state));
 
 	wf_frame_fill(f, 0, f->rows - 1, f->cols, 1, ' ', &wf_app_style_bar);

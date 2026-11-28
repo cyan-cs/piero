@@ -1470,7 +1470,9 @@ static bool gate_first_run_end(Gate *g, Ev *e, bool ok, int fails)
 {
 	ok = ok && e->fails == fails;
 	if (!ok) {
-		ev_check(e, g->tag, 0, "case passes", "case FAILED", 0);
+		if (e->fails == fails) {
+			ev_check(e, g->tag, 0, "case passes", "case FAILED", 0);
+		}
 	}
 	gate_close(g, !ok);
 	free(g);

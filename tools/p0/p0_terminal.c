@@ -224,6 +224,9 @@ static int mode_confirm(WfTerm *t, DWORD timeout_ms, int idle_only)
 			break;
 		}
 		timeout = wf_app_timeout(&r.app);
+		if (wf_term_has_pending_input(t)) {
+			timeout = 0;
+		}
 		if (WF_WAIT_FOREVER == timeout || timeout > (DWORD)left) {
 			timeout = (DWORD)left;
 		}

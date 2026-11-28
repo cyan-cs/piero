@@ -59,7 +59,7 @@ jobs:
       - name: Build and run CTest (known qualification failures remain failures)
         shell: powershell
         run: ./tools/validate_publication.ps1 -Toolchain ${{ matrix.toolchain }} -Configuration ${{ matrix.configuration }} -CompilerCache -BuildDirectory out/ci -JUnit out/ci/ctest.xml
-      - name: Collect test verdicts without raw diagnostic contents
+      - name: Collect verdicts and allowlisted ConPTY diagnostics
         if: always()
         shell: powershell
         run: python tools/ci_test_results.py out/ci/ctest.xml out/ci/ci-results.json
@@ -92,7 +92,7 @@ jobs:
       - name: Instrumented development build and CTest
         shell: powershell
         run: ./tools/validate_publication.ps1 -Toolchain clang -Configuration Debug -Sanitize -CompilerCache -BuildDirectory out/san -JUnit out/san/ctest.xml
-      - name: Collect sanitizer verdicts without raw diagnostic contents
+      - name: Collect sanitizer verdicts and allowlisted ConPTY diagnostics
         if: always()
         shell: powershell
         run: python tools/ci_test_results.py out/san/ctest.xml out/san/ci-results.json

@@ -1158,6 +1158,13 @@ add_executable(test_p0_sgr tests/test_p0_sgr.c)
 target_include_directories(test_p0_sgr PRIVATE tests tools/p0)
 add_test(NAME p0_sgr COMMAND test_p0_sgr)
 
+add_executable(test_conpty_sync tests/test_conpty_sync.c)
+target_link_libraries(test_conpty_sync PRIVATE p0_common p0_lab wfstorage wfcore
+  wflock advapi32 ole32 shell32 user32 userenv rstrtmgr)
+target_include_directories(test_conpty_sync PRIVATE tests tools/p0)
+target_compile_definitions(test_conpty_sync PRIVATE WF_PRODUCT_EDIT)
+add_test(NAME conpty_sync COMMAND test_conpty_sync)
+
 add_executable(test_process_snapshot tests/test_process_snapshot.c)
 target_link_libraries(test_process_snapshot PRIVATE wflock)
 target_include_directories(test_process_snapshot PRIVATE tests)

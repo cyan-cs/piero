@@ -1,0 +1,183 @@
+piero ConPTY E2E調査記録 — 2026-11-28
+====================================
+対象：2bdb5a91ac7fa150b8d8a73c5e738aa41704cf94
+依頼のrun/job：46115532802 / 140888394081
+調査開始HEAD：35148fc。main_pump、wf_term、wf_app_input、wf_app_render、
+p0_conpty_host、p0_searchは対象コミットから調査開始まで変更されていない。
+GitHubの当該ジョブログはこの環境から取得できなかった。以下の実証は、
+依頼にあるCI情報と区別し、手元のWindows/ConPTYで得たものとして記録する。
+
+確定した原因と証拠
+==================
+1. 一覧の描画と検索の受付可能状態が一致していない。
+   can_searchはwant_pathがある間、検索を開始せずMSG_SEARCH_WAITを表示する。
+   一方、従来のステータスは異なるフォルダーへの移動だけをLOADINGとし、
+   同じフォルダーの再読込みは旧一覧とREADYを表示していた。
+   search_sendは250 ms待つだけで、/の後のFILTER遷移や再読込み完了を
+   確認せずTabを送っていた。実際のVTに「The folder is still being read:
+   press Tab again in a moment」があり、期待した空検索の拒否は出ていない。
+   初期のローカル反復でもsearch_empty_query_is_refusedが失敗した。
+
+2. 入力した文字列が見えたことだけでも受付完了を判断できない。
+   初回修正後の100回試験はsearchの10回目で失敗。VTには再び上記の
+   読込み待ちメッセージがあり、Not a valid searchは出ていない。
+   この失敗は不合格として保存し、リトライで消していない。
+   古い検索エラーがステータスを覆うため、検索文字列の編集に成功したら
+   古いメッセージを消し、新しいqueryの描画とFILTER READYの両方を確認する。
+   その後の100回連続試験は全件通過した。
+
+3. 高速反復で証拠ディレクトリ名が衝突する。
+   従来のrun_idは秒単位UTC・scenario・固定label。dirsizeの初回が0.43秒で
+   終わり、同じ秒の次回が0.01秒で起動失敗した。時刻・PID・制限長の
+   scenario/labelで名前を作り、同一秒の別プロセスを分離した。
+
+4. キー解釈モード切替が保留入力を消す。
+   wf_term_set_editing/set_modified_keysがnkept、rep_left、npend、
+   pending_highをゼロ化していた。単体で保留key-up、2回のrepeat、未変換
+   recordを用意すると、修正前は件数・内容・順序の検査が失敗した。
+   モード切替では保持し、明示的なwf_term_drain_inputだけが破棄を担う。
+   コンソールが未通知でも内部に保留入力があれば配送を続ける。エディターの
+   有界キューが満杯の間は無意味な即時待機を行わず、結果・タイマーを待つ。
+   これは実証した入力欠落であるが、当該CIの最初の検索失敗そのものの原因と
+   断定しない。
+5. モーダル入力ドレインにも保留入力の欠落と順序逆転があった。
+   drainは未変換のpendを消す前にkey-upを救済しておらず、keptは末尾から
+   取り出していた。既存key-up a/bと未変換key-up c、破棄対象のdown/repeatを
+   用意した試験は、修正前に件数とa→b→cの順序で4アサーションが失敗。
+   両入力源で同じkey-up救済処理を使い、keptをFIFOにした。押下やrepeatの
+   モーダルでの破棄は維持し、keyup保持容量も既存の16件から変更していない。
+
+共通部で修正した問題・区別すべき仮説
+==================================
+・pty_writeはWriteFileの成否と実書込み数を検査する。部分成功の残量だけを
+  続け、0バイト成功・失敗はWin32コードと成功済みバイト数を保持して停止。
+  次の送信も失敗のままにし、黙って再開しない。書込み時間の状態はPtyごと。
+  模擬APIで短いwrite、途中失敗、0バイト、遅延を検査した。
+  ただし実際の匿名パイプの部分writeが今回のCI原因だった証拠はない。
+・product_wait_msは画面、raw_n、VT/UTF-8パーサー状態、capture_failedを
+  同じcritical sectionで取得する。途中の制御列やUTF-8を受付完了にしない。
+  キャプチャ不能と入力送信不能を通常のタイムアウトから区別し、終了した
+  子の古い画面も成功にしない。既存の60 ms出力安定条件は延長していない。
+  別々のロックで取得していた観測の不整合は修正したが、その競合だけが
+  当該CI失敗を起こしたという実証はない。
+・main_pumpの閉じたエディターの入力は、後続のdeferredより先に配送される。
+  通常モードでエディターの有界キューへ新たに入力を積む変更はしていない。
+  元の閉じたキュー回収がsearch失敗を起こしたという証拠は得ていない。
+・listing到着が直前のエラーメッセージを消さないことをfake FSで検査した。
+  ユーザーがqueryを実際に編集した際の古い通知の消去とは区別している。
+
+同期・判定の変更
+==============
+・検索開始前にNORMAL READY、/の後にFILTER READY、文字入力の後にqueryと
+  FILTER READYを確認。上下移動やフォルダー移動も次の操作前に到着を確認。
+・dirsizeも旧行の表示だけでDを送らずNORMAL READYを確認する。
+・検索・重複検出の250 ms送信後Sleepと、Esc前の500 msの余白を除去。
+  タイムアウト延長、失敗の無条件リトライ、確認ガード緩和は行っていない。
+・検索・重複検出の依存検査は最初の失敗で終了し、残る依存検査をNOT RUNと
+  記録する。同じ失敗をケース終了時に重ねてFAILへ加算しない。
+・元のsearch/dupes/dirsizeのassertion IDは全件維持。結果の件数・パス、
+  コピー拒否、確認ダイアログ、キャンセル後の木とSHA-256の検査も維持。
+・CIは既存ci-results.jsonに最大32件の構造化診断を保存する。固定の許可済み
+  check IDと数値・列挙理由だけを扱い、自由文、画面、VT、パスは送らない。
+  偽のPRIVATE_SENTINEL行や未知のcheck名が出力されないテストを追加した。
+
+横断レビュー
+============
+ホストと直接includeされる20ファイル、計21ソースを対象に送信・snapshot・
+待機・Sleepを棚卸しした。実行上はConPTYを使う28のCTestシナリオがある。
+一覧はout/conpty-review/synchronization-inventory.jsonおよび
+conpty-test-names.jsonへ保存。
+・全シナリオに共通：WriteFile検証、Pty単位の送信状態、snapshot観測、
+  キャプチャ失敗検出、run_id衝突防止、端末の保留入力配送。
+・search/dupes/dirsize：今回実証した状態待機の修正を個別にも適用。
+・pictures/ntfsfacts/hash/tabs/openterm/markdown/session：状態待機・行検査と
+  共通helperの利用を確認。
+・watch/resources：アイドルCPU測定やidle unloadの時間窓を検査する待機は
+  仕様そのもの。単なる画面受付の代用と区別して維持した。
+・images/syntax：遅着結果・色が来ないことを検査する負の時間窓も維持。
+・batch/clipboard/git/fuzzy/lockには従来の入力間隔やsettling待機も残る。
+  各箇所が絶対に競合しないとは結論しない。今回の再現原因に無条件で
+  同一視して機械的に置換していない。lockのガード時間を待つ条件も維持。
+・ui_audit/product_tuiの今回の実行は環境前提によるSKIPを通過と扱わない。
+
+再現・回帰の方法
+================
+conpty_sync：Win32 APIをテスト翻訳単位内で置換し、実helperを呼ぶ。
+  input writeを各300 ms遅延させたモデル、短いwrite、途中失敗、0バイト、
+  CSI/UTF-8途中、キャプチャ失敗、子終了を検査。出力を50/90/150 msに
+  READY→WAIT→READYと変え、最終更新から安定する前に成功しないことも検査。
+hits_ui：fake FSを明示的にdeferし、既存行があるLOADING、Tab拒否、listing
+  到着時のメッセージ保持、再入力での通知消去、worker結果の遅延配送を検査。
+term_input：翻訳モード変更の前後で保留入力を保持し、key-up/repeat/recordを
+  順序どおり配送する。モーダルdrainでdown/repeatを破棄し、buffered key-upを
+  FIFOに保つことも検査。term_edit_input/mouse_ui/editor_compat/confirmも回帰対象。
+これらは決定的なモデル・模擬APIの遅延試験であり、すべての実OS遅延条件や
+物理キーボード・Windows Terminalの挙動を再現したとは扱わない。
+
+性能の参考値
+============
+同じ手元環境の正常終了回。修正前は検索1回8.36秒、dupes3回の中央値3.03秒
+（2.98–3.06秒）、dirsize1回0.43秒。修正前には検索失敗とrun_id衝突も発生。
+100回通過時は検索の中央値3.38秒（3.29–3.46秒）、dupes1.095秒
+（1.04–1.55秒）。dirsizeは初回100回が0.43秒（0.36–0.47秒）、受付状態の
+明示待ちを追加した最終100回は0.55秒（0.44–0.61秒）。約0.12秒の増加は
+テスト側の状態確認によるもので、ディレクトリ集計処理の変更ではない。
+前の成功標本は少なく、一部の試行中は他構成のビルド負荷もあった。
+厳密に負荷を固定したベンチマークや製品自体の高速化の証明ではない。
+固定余白をなくしたテストの所要時間比較としてout/conpty-review/timings.json
+へ保存した。UIキュー容量、保存・コピー・復旧の安全性基準は変更していない。
+
+変更ファイル
+============
+src/main_pump.c、src/term/wf_term.c/.h、src/ui/wf_app_input.c、wf_app_render.c
+tools/p0/p0_conpty_host.c、p0_search.c、p0_dirsize.c、p0_state_gate.c、p0_terminal.c
+tools/ci_test_results.py、tests/test_conpty_sync.c、test_term_input.c、test_hits_ui.c
+tests/test_ci_tools.py、cmake/tests.cmake、.github/workflows/validation.yml
+docs/en/ci.md、docs/ja/ci.md、本書。
+
+成果物・制約
+============
+反復ログ：out/conpty-review/repeat100.log、search100.log。
+追加のモーダル修正後の資格反復はfinal-repeat100.logに保存。
+最後の資格反復の中央値はsearch 3.37秒、dirsize 0.55秒、dupes 1.09秒で、
+各100回通過。詳細はfinal-repeat-summary.json。
+元の不合格ログ、VTのローカル写しも残し、成功だけへ置換していない。
+5構成のビルドログと単体35実行の記録：build-*-final.log、unit-results.json。
+ASan直接実行は最初にruntime PATH不足で起動失敗したため、その記録も別保存。
+CTest設定と同じruntime PATHでの実行に修正してから全6件の通過を確認した。
+合成データのローカル証拠は一般のログ公開対象としない。
+GitHub Actionsの実ランナー上での再実行、物理端末操作は未検証。
+
+最終検証結果
+============
+・clang-cl Release：search_e2e 100/100、dirsize 100/100、dupes_e2e 100/100。
+  dirsizeは受付状態待ち追加後にも100回実行した。
+・全ConPTY 28シナリオ：19 PASS、9 SKIP、0 FAIL。352.73秒。
+  SKIP：product_tui、ui_audit、basic_file_operations、clipboard_e2e、
+  resources_e2e、images_e2e、pictures、lock_rename_e2e、lock_copy_e2e。
+  AppContainer作成、private clipboard station、Restart Manager等の前提が
+  この環境で満たせないため。これらの中の検査は未検証として残る。
+・全ターゲットビルド：clang-cl Debug/Release、MSVC Debug/Release、
+  clang-cl Debug ASan+UBSanの5構成で成功。コンパイラ警告・エラーなし。
+・モーダル修正前のCTest：clang Releaseは主要11件、他4構成は主要12件を全件通過。
+  検索・dirsize・dupes、入力翻訳、mouse/paste、editor_compat、editor_perf、
+  searchworker_win、worker_lifecycle、conpty_syncを対象とした。
+  clang Releaseのdirsizeは別の100回試験へ分離している。
+・新規/関連の単体7件を5構成で直接実行した35実行も全件通過。
+・CIツール27テスト、docsテストとcheck_docs、git diff --checkが通過。
+・途中の不合格やASanの環境設定不足も記録を保持。成功扱いに置換しない。
+・モーダル修正後には対象3ケースを各100回再実行した。別途、実ConPTYの
+  confirmシナリオ2反復も14チェック通過・失敗0（raw-confirm.log）。
+  これはConPTYホスト上の観測であり、Windows Terminalの手動資格ではない。
+・28シナリオの一括実行はモーダル修正前。その後の対象別・構成別の回帰を
+  分けて記録し、一括再実行したかのようには扱わない。
+・最終の入力ドレイン修正後は5構成それぞれで14件、合計70件のCTestが
+  全件通過・SKIP 0・FAIL 0。対象3 E2E、keyboard_profiles、confirm、
+  term_input/term_edit_input、mouse_ui、hits_ui、editor_compat/editor_perf、
+  searchworker_win、worker_lifecycle、conpty_syncを検証。
+  構成別結果はcross-configuration-summary.json、cr/cd/md/mr/sd-final.xml。
+
+残る検証：スキップした9シナリオを実行できるWindows/CI環境での実行。
+各既存Sleepを含む全パターンの任意のOSスケジューリング遅延、入力ドライバー、
+描画フレーム分割に対する形式的保証はしていない。固定待ちの残存箇所は
+上記棚卸しに記録しており、将来の失敗では数値診断とローカル証拠で切り分ける。

@@ -76,7 +76,9 @@ static int scn_dirsize(Ev *e)
 	        !gate_write(g->cfg, DIRSIZE_CONFIG) || !gate_launch(g)) {
 		goto done;
 	}
-	ok = dirsize_row(g, "big/", NULL, 8000);
+	ok = product_wait_ms(&g->pr.p, "NORMAL READY", g->pr.screen,
+	             sizeof g->pr.screen, 8000) &&
+	        dirsize_row(g, "big/", NULL, 8000);
 	ev_check(e, "dirsize_rows_start_without_sizes", 0,
 	        "big/ listed, no size", ok ? "observed" : "missing", ok);
 	if (!ok) {

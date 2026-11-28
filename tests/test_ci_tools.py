@@ -238,6 +238,27 @@ class ResultTests(unittest.TestCase):
             with self.subTest(xml=xml), self.assertRaises(ValueError):
                 self.report(xml)
 
+    def test_conpty_failure_exports_only_bounded_structured_diagnostics(self):
+        line = ('CONPTY wait_failed reason=input_write elapsed_ms=12 '
+                'input_bytes=4 output_bytes=512 parser=0 win32=109')
+        result = self.report('<testsuite><testcase name="search_e2e">'
+                             '<failure/><system-out>PRIVATE_SENTINEL\n' + line +
+                             '\nFAIL check=search_empty_query_is_refused rep=0'
+                             '\nNOT RUN check=dependent_checks reason=prerequisite_failed'
+                             '\nFAIL check=PRIVATE_SENTINEL rep=0'
+                             '\nCONPTY input_write_failed win32=109 sent=4'
+                             '\nCONPTY wait_failed reason=PRIVATE_SENTINEL elapsed_ms=0'
+                             '</system-out></testcase></testsuite>')
+        diagnostics = result['tests'][0]['diagnostics']
+        self.assertEqual(len(diagnostics), 4)
+        self.assertEqual(diagnostics[0]['win32'], 109)
+        self.assertEqual(diagnostics[2]['status'], 'NOT RUN')
+        self.assertNotIn('PRIVATE_SENTINEL', json.dumps(result))
+        long = self.report('<testsuite><testcase name="search_e2e"><failure/>'
+                           '<system-out>' + '\n'.join([line] * 80) +
+                           '</system-out></testcase></testsuite>')
+        self.assertEqual(len(long['tests'][0]['diagnostics']), 32)
+
     def test_missing_report_records_not_run_and_fails(self):
         output=self.folder/'summary.json'
         with patch.object(sys, 'argv', ['ci_test_results', str(self.folder/'missing.xml'), str(output)]):

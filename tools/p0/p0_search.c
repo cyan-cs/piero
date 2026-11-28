@@ -13,12 +13,24 @@ static bool search_wait(Gate *g, const char *text, DWORD ms)
 	        &g->pr.p, text, g->pr.screen, sizeof g->pr.screen, ms);
 }
 
-/* Sends keys, and gives the program a moment: an Esc followed at once by another key
- * is read as Alt and that key, so every send is spaced from the next. */
-static void search_send(Gate *g, const char *bytes, size_t n)
+static bool search_send(Gate *g, const char *bytes, size_t n)
 {
 	pty_send(&g->pr.p, bytes, n);
-	Sleep(250);
+	return !g->pr.p.input_error;
+}
+
+static bool search_prompt(Gate *g)
+{
+	return search_send(g, "/", 1) && search_wait(g, "FILTER READY", 8000);
+}
+
+static bool search_type(Gate *g, const char *text)
+{
+	char prompt[128];
+	snprintf(prompt, sizeof prompt, "/%s_", text);
+	return search_send(g, text, strlen(text)) &&
+	        search_wait(g, prompt, 8000) &&
+	        search_wait(g, "FILTER READY", 8000);
 }
 
 static bool search_make_files(Gate *g)
@@ -38,6 +50,7 @@ static bool search_case(Ev *e)
 	Gate *g = calloc(1, sizeof *g);
 	char *before = NULL;
 	bool ok = false;
+	bool ran_to_exit = false;
 	int fails = e->fails;
 
 	if (!g || !gate_wanted("search")) {
@@ -50,7 +63,7 @@ static bool search_case(Ev *e)
 	        !gate_write(g->cfg, DIRSIZE_CONFIG) || !gate_launch(g)) {
 		goto done;
 	}
-	ok = search_wait(g, "note.txt", 8000) &&
+	ok = search_wait(g, "NORMAL READY", 8000) &&
 	        dirsize_row(g, "note.txt", NULL, 8000);
 	ev_check(e, "search_list_is_shown", 0, "the folder is listed",
 	        ok ? "observed" : "missing", ok);
@@ -60,28 +73,52 @@ static bool search_case(Ev *e)
 	before = gate_tree_text(g->browse);
 
 	/* an empty query and a wrong one change nothing */
-	search_send(g, "/", 1);
+	if (!search_prompt(g)) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\t", 1);
 	ok = search_wait(g, "Type what to look for", 5000);
 	ev_check(e, "search_empty_query_is_refused", 0, "Type what to look for",
 	        ok ? "observed" : "missing", ok);
-	search_send(g, "size>x", 6);
+	if (!ok) {
+		goto done;
+	}
+	if (!search_type(g, "size>x")) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\t", 1);
 	ok = ok && search_wait(g, "Not a valid search", 5000);
 	ev_check(e, "search_wrong_query_is_refused", 0, "Not a valid search",
 	        ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x1b", 1); /* drops the filter */
 	ok = ok && search_wait(g, "NORMAL", 5000);
+	if (!ok) {
+		goto done;
+	}
 
 	/* the search: words and an extension */
-	search_send(g, "/", 1);
-	search_send(g, "report ext:txt", 14);
+	if (!search_prompt(g)) {
+		ok = false;
+		goto done;
+	}
+	if (!search_type(g, "report ext:txt")) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\t", 1);
 	ok = ok && search_wait(g, "2 found", 15000) &&
 	        search_wait(g, "finished", 15000);
 	product_snapshot(&g->pr, "search_results");
 	ev_check(e, "search_finds_below_the_folder", 0, "2 found, finished",
 	        ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 	pty_snapshot(&g->pr.p, g->pr.screen, sizeof g->pr.screen);
 	ok = ok && strstr(g->pr.screen, "a\\report one.txt") &&
 	        strstr(g->pr.screen, "b\\deep\\report two.txt") &&
@@ -96,6 +133,10 @@ static bool search_case(Ev *e)
 
 	/* Enter shows the second in its folder, with the cursor on it */
 	search_send(g, "\x1b[B", 3);
+	if (!search_wait(g, "> b\\deep\\report two.txt", 5000)) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\r", 1);
 	ok = search_wait(g, "browse\\b\\deep", 8000) &&
 	        dirsize_row(g, "> report two.txt", "", 8000);
@@ -108,18 +149,38 @@ static bool search_case(Ev *e)
 	}
 
 	/* a search from there is a search of there: one result */
-	search_send(g, "/", 1);
-	search_send(g, "report", 6);
+	if (!search_prompt(g)) {
+		ok = false;
+		goto done;
+	}
+	if (!search_type(g, "report")) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\t", 1);
 	ok = search_wait(g, "1 found", 15000);
 	ev_check(e, "search_starts_from_the_folder_on_screen", 0, "1 found",
 	        ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 	search_send(
 	        g, "\x1b", 1); /* the walk is over: this closes the window */
 	ok = ok && search_wait(g, "NORMAL", 5000);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x1b", 1); /* and this drops the filter */
+	if (!search_wait(g, "NORMAL", 5000)) {
+		ok = false;
+		goto done;
+	}
 	/* back up to the folder we began in */
 	search_send(g, "h", 1);
+	if (!search_wait(g, "> deep/", 8000)) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "h", 1);
 	ok = ok && dirsize_row(g, "note.txt", "", 8000);
 	if (!ok) {
@@ -127,18 +188,33 @@ static bool search_case(Ev *e)
 	}
 
 	/* the three of "report" are in three folders: copy refuses, delete asks once */
-	search_send(g, "/", 1);
-	search_send(g, "report", 6);
+	if (!search_prompt(g)) {
+		ok = false;
+		goto done;
+	}
+	if (!search_type(g, "report")) {
+		ok = false;
+		goto done;
+	}
 	search_send(g, "\t", 1);
 	ok = search_wait(g, "3 found", 15000) &&
 	        search_wait(g, "finished", 15000);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x01", 1); /* Ctrl+A marks every result */
 	ok = ok && search_wait(g, "3 marked", 5000);
+	if (!ok) {
+		goto done;
+	}
 	product_snapshot(&g->pr, "search_marked");
 	search_send(g, "y", 1);
 	ok = ok && search_wait(g, "one folder at a time", 5000);
 	ev_check(e, "search_copy_of_several_folders_is_refused", 0,
 	        "one folder at a time", ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x1b[3~", 4);
 	ok = ok && search_wait(g, "3 item(s) in 3 folder(s)", 8000) &&
 	        NULL != strstr(g->pr.screen, "RECYCLE");
@@ -146,9 +222,14 @@ static bool search_case(Ev *e)
 	ev_check(e, "search_delete_asks_once_for_every_folder", 0,
 	        "RECYCLE, 3 item(s) in 3 folder(s)",
 	        ok ? "observed" : "missing", ok);
-	Sleep(500);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x1b", 1); /* Esc: the question is dropped */
 	ok = ok && search_wait(g, "NORMAL", 5000);
+	if (!ok) {
+		goto done;
+	}
 	{
 		char *now = gate_tree_text(g->browse);
 
@@ -157,8 +238,15 @@ static bool search_case(Ev *e)
 	}
 	ev_check(e, "search_cancel_changes_nothing", 0, "the tree is as it was",
 	        ok ? "unchanged" : "CHANGED", ok);
+	if (!ok) {
+		goto done;
+	}
+	ran_to_exit = true;
 	ok = ok && gate_quit(g);
 done:
+	if (!ok && !ran_to_exit) {
+		ev_not_run(e);
+	}
 	free(before);
 	return gate_first_run_end(g, e, ok, fails);
 }
@@ -193,6 +281,7 @@ static bool dupes_case(Ev *e)
 	Gate *g = calloc(1, sizeof *g);
 	char *before = NULL;
 	bool ok = false;
+	bool ran_to_exit = false;
 	int fails = e->fails;
 
 	if (!g || !gate_wanted("dupes")) {
@@ -207,7 +296,7 @@ static bool dupes_case(Ev *e)
 	}
 	/* A row can arrive before the rest of its VT frame. Use the same
 	 * output-quiescence gate as subsequent steps before sending F. */
-	ok = search_wait(g, "note.txt", 8000) &&
+	ok = search_wait(g, "NORMAL READY", 8000) &&
 	        dirsize_row(g, "note.txt", NULL, 8000);
 	ev_check(e, "dupes_list_is_shown", 0, "the folder is listed",
 	        ok ? "observed" : "missing", ok);
@@ -224,6 +313,9 @@ static bool dupes_case(Ev *e)
 	ev_check(e, "dupes_finds_the_three_equal_files", 0,
 	        "3 files in 1 groups, finished", ok ? "observed" : "missing",
 	        ok);
+	if (!ok) {
+		goto done;
+	}
 	pty_snapshot(&g->pr.p, g->pr.screen, sizeof g->pr.screen);
 	ok = ok && strstr(g->pr.screen, "[1]") &&
 	        strstr(g->pr.screen, "a\\report one.txt") &&
@@ -244,6 +336,9 @@ static bool dupes_case(Ev *e)
 	ok = search_wait(g, "only recycled", 5000);
 	ev_check(e, "dupes_ctrl_a_is_not_offered", 0, "only recycled",
 	        ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 
 	/* two can be marked, the last of the group cannot */
 	search_send(g, "   ", 3);
@@ -253,10 +348,16 @@ static bool dupes_case(Ev *e)
 	ev_check(e, "dupes_the_last_copy_cannot_be_marked", 0,
 	        "2 marked, and the third refused", ok ? "observed" : "missing",
 	        ok);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "y", 1);
 	ok = ok && search_wait(g, "only recycled", 5000);
 	ev_check(e, "dupes_copy_is_not_offered", 0, "only recycled",
 	        ok ? "observed" : "missing", ok);
+	if (!ok) {
+		goto done;
+	}
 
 	/* Delete asks once; Esc leaves everything as it was */
 	search_send(g, "\x1b[3~", 4);
@@ -266,9 +367,14 @@ static bool dupes_case(Ev *e)
 	ev_check(e, "dupes_delete_asks_once", 0,
 	        "RECYCLE, 2 item(s) in 2 folder(s)",
 	        ok ? "observed" : "missing", ok);
-	Sleep(500);
+	if (!ok) {
+		goto done;
+	}
 	search_send(g, "\x1b", 1);
 	ok = ok && search_wait(g, "NORMAL", 5000);
+	if (!ok) {
+		goto done;
+	}
 	{
 		char *now = gate_tree_text(g->browse);
 
@@ -277,8 +383,15 @@ static bool dupes_case(Ev *e)
 	}
 	ev_check(e, "dupes_cancel_changes_nothing", 0, "the tree is as it was",
 	        ok ? "unchanged" : "CHANGED", ok);
+	if (!ok) {
+		goto done;
+	}
+	ran_to_exit = true;
 	ok = ok && gate_quit(g);
 done:
+	if (!ok && !ran_to_exit) {
+		ev_not_run(e);
+	}
 	free(before);
 	return gate_first_run_end(g, e, ok, fails);
 }

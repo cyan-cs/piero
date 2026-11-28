@@ -788,7 +788,9 @@ int wf_main_run_loop(Loop *lp)
 			timeout = min_u32(timeout,
 			        wf_es_timeout(lp->editor, lp->app.now_ms));
 		}
-		if (deferred_n) {
+		if ((&WF_MODE_EDITOR != lp->app.mode ||
+		            wf_es_input_ready(lp->editor)) &&
+		        (deferred_n || wf_term_has_pending_input(lp->term))) {
 			timeout = 0;
 		}
 		w = WaitForMultipleObjects(count, waits, FALSE,

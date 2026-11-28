@@ -1,7 +1,16 @@
 /* Test-only inclusion makes the actual static translator observable without
  * exposing Win32 input records through the product API. No console is opened.
  */
+#include <windows.h>
+static BOOL WINAPI test_set_console_mode(HANDLE handle, DWORD mode)
+{
+	(void)handle;
+	(void)mode;
+	return TRUE;
+}
+#define SetConsoleMode test_set_console_mode
 #include "../src/term/wf_term.c"
+#undef SetConsoleMode
 #include "wf_test.h"
 
 static void check_key(WORD vk, DWORD controls, WfKey expected)
@@ -452,8 +461,56 @@ static void what_does_not_fit_is_kept_for_the_next_read(void)
 	CHECK(1 == n && 'c' == ev[0].ch && 0 == t.npend && 0 == t.rep_left);
 }
 
+static void modal_drain_keeps_buffered_key_ups_in_fifo_order(void)
+{
+	WfTerm t = {0};
+	WfEvent events[8] = {0};
+	t.kept[0] = (WfEvent){WF_EV_RELEASE, 'a', WF_KEY_NONE, 0};
+	t.kept[1] = (WfEvent){WF_EV_RELEASE, 'b', WF_KEY_NONE, 0};
+	t.nkept = 2;
+	t.pend[0] = held('C', L'c', 1, FALSE);
+	t.pend[1] = held('X', L'x', 1, TRUE);
+	t.npend = 2;
+	t.rep_ev = (WfEvent){WF_EV_CHAR, 'x', WF_KEY_NONE, 0};
+	t.rep_left = 5;
+	wf_term_drain_input(&t);
+	CHECK(!t.npend && !t.rep_left && t.nkept == 3);
+	CHECK(1 == wf_term_read_events(&t, events, 1) && events[0].ch == 'a');
+	CHECK(2 == wf_term_read_events(&t, events, 8));
+	CHECK(events[0].ch == 'b' && events[1].ch == 'c');
+	CHECK(!wf_term_has_pending_input(&t));
+}
+
+static void mode_changes_preserve_pending_input_in_delivery_order(void)
+{
+	WfTerm t = {0};
+	WfEvent events[8] = {0};
+	t.kept[0] = (WfEvent){WF_EV_RELEASE, 'z', WF_KEY_NONE, 0};
+	t.nkept = 1;
+	t.rep_ev = (WfEvent){WF_EV_CHAR, 'x', WF_KEY_NONE, 0};
+	t.rep_left = 2;
+	t.pend[0].EventType = KEY_EVENT;
+	t.pend[0].Event.KeyEvent.bKeyDown = TRUE;
+	t.pend[0].Event.KeyEvent.wVirtualKeyCode = 'B';
+	t.pend[0].Event.KeyEvent.uChar.UnicodeChar = L'b';
+	t.npend = 1;
+	CHECK(wf_term_has_pending_input(&t));
+	CHECK(WF_OK == wf_term_set_modified_keys(&t, true));
+	CHECK(t.nkept == 1 && t.rep_left == 2 && t.npend == 1);
+	CHECK(WF_OK == wf_term_set_modified_keys(&t, false));
+	CHECK(WF_OK == wf_term_set_editing(&t, true));
+	CHECK(WF_OK == wf_term_set_editing(&t, false));
+	CHECK(t.nkept == 1 && t.rep_left == 2 && t.npend == 1);
+	CHECK(4 == wf_term_read_events(&t, events, 8));
+	CHECK(events[0].ch == 'z' && events[1].ch == 'x' &&
+	        events[2].ch == 'x' && events[3].ch == 'b');
+	CHECK(!wf_term_has_pending_input(&t));
+}
+
 int main(void)
 {
+	mode_changes_preserve_pending_input_in_delivery_order();
+	modal_drain_keeps_buffered_key_ups_in_fifo_order();
 	a_repeat_count_gives_that_many_events();
 	what_does_not_fit_is_kept_for_the_next_read();
 	the_pointer_gives_presses_double_clicks_and_wheel_steps();
