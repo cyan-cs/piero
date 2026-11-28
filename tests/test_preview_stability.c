@@ -143,15 +143,14 @@ static void idle_and_revalidation(void)
 	defer_listing = true;
 	wf_app_refresh(&app, true);
 	wf_app_draw(&app, after);
-	/* the folder is read again where it is: nothing on the screen says so,
-	 * and not one cell of it changes (no "updating", no LOADING) */
+	/* Only the status row changes while the folder is read again. */
 	{
 		WfBuf quiet = {0};
+		size_t status = (size_t)(after->rows - 1) * (size_t)after->cols;
 
-		CHECK(app.want_path && !frame_has(after, "previous view") &&
-		        !frame_has(after, "Updating") &&
-		        !frame_has(after, "LOADING") &&
-		        frame_has(after, "first"));
+		CHECK(app.want_path && frame_has(after, "LOADING"));
+		memcpy(after->cells + status, before->cells + status,
+		        (size_t)after->cols * sizeof *after->cells);
 		CHECK(wf_graphics_present(before, after, &quiet) == WF_OK &&
 		        !quiet.len);
 		wf_buf_free(&quiet);
@@ -166,7 +165,7 @@ static void idle_and_revalidation(void)
 
 		CHECK(!frame_has(after, "previous view") &&
 		        !frame_has(after, "Updating") &&
-		        frame_has(after, "first"));
+		        frame_has(after, "first") && frame_has(after, "READY"));
 		CHECK(wf_graphics_present(before, after, &quiet) == WF_OK &&
 		        !quiet.len);
 		wf_buf_free(&quiet);

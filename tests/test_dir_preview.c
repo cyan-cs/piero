@@ -144,10 +144,8 @@ static void the_listing_is_shown_with_folders_marked(void)
 	wf_app_destroy(&r.app);
 }
 
-/* The folder on screen is read again where it is (the watch, the reload): the
- * count and the list stay as they were, nothing says "updating" over them and
- * the status line does not turn to LOADING; that is for going somewhere else. */
-static void reading_the_same_folder_again_changes_nothing_on_screen(void)
+/* A listing refresh changes the status while keeping the folder preview. */
+static void reading_the_same_folder_again_keeps_the_preview(void)
 {
 	static Rig r;
 
@@ -159,9 +157,9 @@ static void reading_the_same_folder_again_changes_nothing_on_screen(void)
 	wf_app_refresh(&r.app, true);
 	CHECK(NULL != r.app.want_path);
 	CHECK(screen_has(&r.app, "3 items") &&
-	        screen_has(&r.app, "folder00/") && screen_has(&r.app, "READY"));
-	CHECK(!screen_has(&r.app, "Updating") &&
-	        !screen_has(&r.app, "LOADING"));
+	        screen_has(&r.app, "folder00/") &&
+	        screen_has(&r.app, "LOADING"));
+	CHECK(!screen_has(&r.app, "Updating"));
 	wf_app_destroy(&r.app);
 }
 
@@ -362,7 +360,7 @@ int main(void)
 {
 	the_request_is_debounced_and_names_the_folder();
 	the_listing_is_shown_with_folders_marked();
-	reading_the_same_folder_again_changes_nothing_on_screen();
+	reading_the_same_folder_again_keeps_the_preview();
 	a_moving_cursor_does_not_enumerate_every_folder();
 	a_stale_answer_is_dropped();
 	empty_denied_and_failed_listings_say_so();

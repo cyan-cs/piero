@@ -448,9 +448,7 @@ static const char *dirprev_failure(WfStatus st)
 /* The listing of the directory under the cursor: a count line, then its
  * entries in the pane's own view (no cursor). Returns false when the pane is
  * not showing a directory listing. */
-/* LOADING is for going to another folder (or the first listing). A folder that
- * is read again where it is (the watch, the reload) shows what it showed until
- * the new reading differs, and says nothing meanwhile. */
+/* A same-folder refresh keeps showing the current listing. */
 static bool navigating(const WfApp *app)
 {
 	return app->want_path &&
