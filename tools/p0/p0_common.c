@@ -136,14 +136,14 @@ int p0_free_space_for(const wchar_t *dir, unsigned long long fixtures)
 	return 1;
 }
 
-int p0_sha256_file(const wchar_t *path, char hex[P0_HASH_HEX])
+static int sha256_file(const wchar_t *path, char hex[P0_HASH_HEX], DWORD share)
 {
-	HANDLE f = CreateFileW(path, GENERIC_READ,
-	        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+	HANDLE f = CreateFileW(path, GENERIC_READ, share, NULL, OPEN_EXISTING,
 	        FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	P0Hash *h;
 	static UCHAR buf[1 << 20];
 	DWORD got;
+	BOOL read_ok;
 
 	hex[0] = '\0';
 	if (INVALID_HANDLE_VALUE == f) {
@@ -154,12 +154,28 @@ int p0_sha256_file(const wchar_t *path, char hex[P0_HASH_HEX])
 		CloseHandle(f);
 		return 0;
 	}
-	while (ReadFile(f, buf, sizeof buf, &got, NULL) && got > 0) {
+	while ((read_ok = ReadFile(f, buf, sizeof buf, &got, NULL)) &&
+	        got > 0) {
 		p0_hash_update(h, buf, got);
 	}
 	CloseHandle(f);
 	p0_hash_end(h, hex);
+	if (!read_ok) {
+		hex[0] = '\0';
+		return 0;
+	}
 	return 1;
+}
+
+int p0_sha256_file(const wchar_t *path, char hex[P0_HASH_HEX])
+{
+	return sha256_file(path, hex, FILE_SHARE_READ | FILE_SHARE_WRITE);
+}
+
+int p0_sha256_observe(const wchar_t *path, char hex[P0_HASH_HEX])
+{
+	return sha256_file(path, hex,
+	        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE);
 }
 
 void p0_json_str(FILE *f, const char *s)

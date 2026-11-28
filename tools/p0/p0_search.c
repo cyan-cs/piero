@@ -50,7 +50,8 @@ static bool search_case(Ev *e)
 	        !gate_write(g->cfg, DIRSIZE_CONFIG) || !gate_launch(g)) {
 		goto done;
 	}
-	ok = dirsize_row(g, "note.txt", NULL, 8000);
+	ok = search_wait(g, "note.txt", 8000) &&
+	        dirsize_row(g, "note.txt", NULL, 8000);
 	ev_check(e, "search_list_is_shown", 0, "the folder is listed",
 	        ok ? "observed" : "missing", ok);
 	if (!ok) {
@@ -204,7 +205,10 @@ static bool dupes_case(Ev *e)
 	        !gate_write(g->cfg, DIRSIZE_CONFIG) || !gate_launch(g)) {
 		goto done;
 	}
-	ok = dirsize_row(g, "note.txt", NULL, 8000);
+	/* A row can arrive before the rest of its VT frame. Use the same
+	 * output-quiescence gate as subsequent steps before sending F. */
+	ok = search_wait(g, "note.txt", 8000) &&
+	        dirsize_row(g, "note.txt", NULL, 8000);
 	ev_check(e, "dupes_list_is_shown", 0, "the folder is listed",
 	        ok ? "observed" : "missing", ok);
 	if (!ok) {

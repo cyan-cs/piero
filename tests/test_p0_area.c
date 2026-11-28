@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "../tools/p0/p0_area.h"
+#include "../tools/p0/p0_common.h"
 #include "wf_test.h"
 #include "../src/base/wf_macro.h"
 
@@ -54,6 +55,37 @@ static void test_roundtrip(void)
 	CHECK(exists(p));
 	CHECK(0 == p0_area_destroy(a, rep, 512));
 	CHECK(!exists(p));
+}
+
+/* The editor pins its original with DELETE access before saving by rename.
+ * A test observing that save must be able to hash the pinned file without
+ * interfering; a stable-source integrity reader deliberately cannot. */
+static void test_hash_observation_shares_delete(void)
+{
+	P0Area *a = fresh("hash-observe");
+	wchar_t path[MAX_PATH * 2];
+	char expected[P0_HASH_HEX], observed[P0_HASH_HEX];
+	HANDLE pin;
+
+	CHECK(a != NULL);
+	if (!a) {
+		return;
+	}
+	CHECK(p0_area_path(a, L"original.txt", path, MAX_PATH * 2));
+	make_file(path, "abc");
+	CHECK(p0_area_track(a, L"original.txt", 0));
+	CHECK(p0_sha256_file(path, expected));
+	pin = CreateFileW(path, GENERIC_READ | DELETE,
+	        FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+	        FILE_ATTRIBUTE_NORMAL, NULL);
+	CHECK(pin != INVALID_HANDLE_VALUE);
+	if (pin != INVALID_HANDLE_VALUE) {
+		CHECK(!p0_sha256_file(path, observed));
+		CHECK(p0_sha256_observe(path, observed));
+		CHECK(!strcmp(expected, observed));
+		CloseHandle(pin);
+	}
+	CHECK(0 == p0_area_destroy(a, NULL, 0));
 }
 
 /* An object that is already gone is not a leftover, even when its parent is
@@ -460,6 +492,7 @@ int main(void)
 	CHECK(CreateDirectoryW(g_base, NULL));
 
 	test_roundtrip();
+	test_hash_observation_shares_delete();
 	test_already_gone_is_not_a_leftover();
 	test_long_paths();
 	test_name_rules();

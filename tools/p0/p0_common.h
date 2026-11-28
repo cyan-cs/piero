@@ -28,6 +28,10 @@ P0Hash *p0_hash_begin(void);
 void p0_hash_update(P0Hash *h, const void *p, size_t n);
 void p0_hash_end(P0Hash *h, char hex[P0_HASH_HEX]); /* frees h */
 int p0_sha256_file(const wchar_t *path, char hex[P0_HASH_HEX]);
+/* Polling a live save must not block its DELETE-access pin/rename. The digest
+ * belongs to the opened object; the pathname may be replaced during the read.
+ * This is an observation, not a stable-source integrity proof. */
+int p0_sha256_observe(const wchar_t *path, char hex[P0_HASH_HEX]);
 
 /*
  * A test that writes large files must know the disk can take them before it

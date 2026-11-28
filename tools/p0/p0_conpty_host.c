@@ -3011,7 +3011,9 @@ static bool product_keyboard(Product *pr)
 		ok = false;
 		for (ULONGLONG end = GetTickCount64() + 10000;
 		        !ok && GetTickCount64() < end;) {
-			ok = p0_sha256_file(actual, actual_hash) &&
+			/* A normal integrity read denies DELETE sharing and can race
+			 * the editor's save pin/rename. Observation must allow it. */
+			ok = p0_sha256_observe(actual, actual_hash) &&
 			        !strcmp(actual_hash, expected_hash);
 			if (!ok) {
 				Sleep(20);
