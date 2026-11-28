@@ -1153,6 +1153,7 @@ static void items_picked_in_a_zip_are_extracted_by_p_in_a_folder(void)
 	        !wcscmp(r.copy.inner0, L"d\\file2.txt") &&
 	        !wcscmp(r.copy.dest, L"C:\\Users"));
 	/* a newer pick of real files replaces the pick from the archive */
+	wf_app_destroy(&r.app);
 	rig_open(&r, true, true);
 	r.app.arc_pick.archive = _wcsdup(L"C:\\z.zip");
 	r.app.arc_pick.inner = calloc(1, sizeof *r.app.arc_pick.inner);

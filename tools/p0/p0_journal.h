@@ -50,6 +50,11 @@ typedef struct
 } P0TempId;
 #pragma pack(pop)
 
+/* This compatibility format stores Windows UTF-16, not host-wide strings. */
+_Static_assert(sizeof(wchar_t) == 2, "P0 journal requires Windows UTF-16");
+_Static_assert(sizeof(P0Intent) == 816, "P0 INTENT wire size");
+_Static_assert(sizeof(P0TempId) == 416, "P0 TEMP_ID wire size");
+
 typedef struct
 {
 	HANDLE h;

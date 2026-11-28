@@ -5,6 +5,9 @@
 
 #include <bcrypt.h>
 #include <share.h>
+#include <sddl.h>
+#include <fcntl.h>
+#include <io.h>
 #include <string.h>
 
 void p0_utc_iso(char out[24])
@@ -204,11 +207,125 @@ void p0_json_wstr(FILE *f, const wchar_t *s)
 	p0_json_str(f, n > 0 ? u8 : "");
 }
 
+int p0_private_security(int inherit, PSECURITY_DESCRIPTOR *out)
+{
+	HANDLE token = NULL;
+	TOKEN_USER *user = NULL;
+	wchar_t *sid = NULL, sddl[512];
+	DWORD bytes = 0, error = ERROR_SUCCESS;
+	int ok = 0;
+	*out = NULL;
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+		goto os_error;
+	}
+	GetTokenInformation(token, TokenUser, NULL, 0, &bytes);
+	if (!bytes) {
+		goto os_error;
+	}
+	user = malloc(bytes);
+	if (!user) {
+		error = ERROR_NOT_ENOUGH_MEMORY;
+		goto done;
+	}
+	if (!GetTokenInformation(token, TokenUser, user, bytes, &bytes) ||
+	        !ConvertSidToStringSidW(user->User.Sid, &sid)) {
+		goto os_error;
+	}
+	if (swprintf(sddl, WF_ARRAY_LEN(sddl), L"O:%lsD:P(A;%ls;FA;;;%ls)", sid,
+	            inherit ? L"OICI" : L"", sid) < 0) {
+		error = ERROR_INSUFFICIENT_BUFFER;
+		goto done;
+	}
+	ok = ConvertStringSecurityDescriptorToSecurityDescriptorW(
+	        sddl, SDDL_REVISION_1, out, NULL);
+	if (!ok) {
+		goto os_error;
+	}
+	goto done;
+os_error:
+	error = GetLastError();
+done:
+	LocalFree(sid);
+	free(user);
+	if (token) {
+		CloseHandle(token);
+	}
+	if (!ok) {
+		SetLastError(error);
+	}
+	return ok;
+}
+
+/* Open first, inspect that same object, then truncate: a final reparse point
+ * or hard link must never redirect an evidence write onto another file.
+ * Security attributes apply only to new files; existing ACLs are untouched. */
+static FILE *open_output(const wchar_t *path, int append)
+{
+	PSECURITY_DESCRIPTOR sd = NULL;
+	SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, FALSE};
+	BY_HANDLE_FILE_INFORMATION info;
+	HANDLE h;
+	FILE *f;
+	int fd;
+	LARGE_INTEGER zero = {0};
+	if (!p0_private_security(0, &sd)) {
+		return NULL;
+	}
+	sa.lpSecurityDescriptor = sd;
+	h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, &sa, OPEN_ALWAYS,
+	        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+	DWORD error = GetLastError();
+	LocalFree(sd);
+	if (h == INVALID_HANDLE_VALUE) {
+		SetLastError(error);
+		return NULL;
+	}
+	if (!GetFileInformationByHandle(h, &info)) {
+		error = GetLastError();
+		goto close_handle;
+	}
+	if ((info.dwFileAttributes &
+	            (FILE_ATTRIBUTE_REPARSE_POINT |
+	                    FILE_ATTRIBUTE_DIRECTORY)) ||
+	        info.nNumberOfLinks != 1) {
+		error = ERROR_ACCESS_DENIED;
+		goto close_handle;
+	}
+	fd = _open_osfhandle((intptr_t)h,
+	        _O_WRONLY | _O_BINARY | _O_NOINHERIT |
+	                (append ? _O_APPEND : 0));
+	if (fd == -1) {
+		error = ERROR_NOT_ENOUGH_MEMORY;
+		goto close_handle;
+	}
+	/* fd now owns h; f owns fd only after _fdopen succeeds. */
+	f = _fdopen(fd, append ? "ab" : "wb");
+	if (!f) {
+		_close(fd);
+		return NULL;
+	}
+	if (!SetFilePointerEx(h, zero, NULL, append ? FILE_END : FILE_BEGIN) ||
+	        (!append && !SetEndOfFile(h))) {
+		error = GetLastError();
+		fclose(f);
+		SetLastError(error);
+		return NULL;
+	}
+	return f;
+close_handle:
+	CloseHandle(h);
+	SetLastError(error);
+	return NULL;
+}
+
 FILE *p0_fopen_w(const wchar_t *path)
 {
-	/* _wfopen_s would open the file exclusively; the host process reads the
-	 * log while the child is still writing it, so share it explicitly. */
-	return _wfsopen(path, L"wb", _SH_DENYWR);
+	return open_output(path, 0);
+}
+
+FILE *p0_fappend_w(const wchar_t *path)
+{
+	return open_output(path, 1);
 }
 
 static int reg_str(HKEY root,

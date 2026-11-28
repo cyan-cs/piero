@@ -13,7 +13,9 @@
 //    send. Window titles of non-allowlisted images are never printed.
 //  - The process ends itself after a deadline, so a hung UI Automation provider cannot
 //    leave an orphan.
-#define WIN32_LEAN_AND_MEAN
+#ifndef WIN32_LEAN_AND_MEAN
+#	define WIN32_LEAN_AND_MEAN
+#endif
 #define COBJMACROS
 #include <windows.h>
 #include <objbase.h>
@@ -81,10 +83,14 @@ static void out(const wchar_t *fmt, ...)
 }
 
 // Control characters and over-long text are removed so one value stays on one line.
-static void clean(wchar_t *s)
+static void clean(wchar_t *s, size_t cap)
 {
 	size_t i = 0;
-	for (; s[i] && i < MAX_TEXT_OUT; i++) {
+	if (!cap) {
+		return;
+	}
+	size_t limit = cap - 1 < MAX_TEXT_OUT ? cap - 1 : MAX_TEXT_OUT;
+	for (; i < limit && s[i]; i++) {
 		if (s[i] < 0x20 || s[i] == 0x7f) {
 			s[i] = L' ';
 		}
@@ -143,7 +149,7 @@ static bool win_info(HWND h, Win *w)
 		w->title[0] = 0;
 	}
 	w->title[(sizeof w->title / sizeof w->title[0]) - 1] = 0;
-	clean(w->title);
+	clean(w->title, sizeof w->title / sizeof *w->title);
 	return true;
 }
 
@@ -976,7 +982,7 @@ static void bstr_out(BSTR b, wchar_t *dst, size_t cap)
 	dst[0] = 0;
 	if (b) {
 		wcsncpy_s(dst, cap, b, _TRUNCATE);
-		clean(dst);
+		clean(dst, cap);
 	}
 }
 

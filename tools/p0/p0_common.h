@@ -78,5 +78,10 @@ int p0_write_run_json(const wchar_t *file,
 
 /* Opens a UTF-8 file for writing; NULL on failure. */
 FILE *p0_fopen_w(const wchar_t *path);
+/* Same sharing and ownership as p0_fopen_w, without truncating existing data. */
+FILE *p0_fappend_w(const wchar_t *path);
+/* Protected TokenUser-only descriptor for a new object. `inherit` adds OI/CI
+ * for a directory's children. Caller LocalFree's *out, including on failure. */
+int p0_private_security(int inherit, PSECURITY_DESCRIPTOR *out);
 
 #endif

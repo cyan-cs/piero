@@ -76,6 +76,37 @@ static void a_line_with_a_nul_is_never_a_command(void)
 	CHECK(wf_ex_parse("q!", 2, WF_EXS_EDITOR, &e) && WF_EX_NONE != e.id);
 }
 
+static void explicit_lengths_and_terminator_boundaries(void)
+{
+	WfEx e;
+	const char command[2] = {
+	        'q', '!'}; /* deliberately not NUL-terminated */
+	CHECK(wf_ex_parse(command, sizeof command, WF_EXS_EDITOR, &e));
+	CHECK(e.id == WF_EX_QUIT_FORCE);
+	CHECK(!wf_ex_parse(command, 0, WF_EXS_EDITOR, &e) &&
+	        e.error == WF_EXE_EMPTY);
+	char *text = malloc(2 * WF_EX_ARG_MAX);
+	CHECK(text);
+	if (!text) {
+		return;
+	}
+	memset(text, 'x', 2 * WF_EX_ARG_MAX);
+	CHECK(!wf_ex_parse(text, 2 * WF_EX_ARG_MAX, WF_EXS_EDITOR, &e));
+	CHECK(e.error == WF_EXE_UNKNOWN && strlen(e.name) == sizeof e.name - 1);
+	for (size_t at = 0; at < 2 * WF_EX_ARG_MAX; at++) {
+		memset(text, 'x', 2 * WF_EX_ARG_MAX);
+		text[at] = 0;
+		CHECK(!wf_ex_parse(text, 2 * WF_EX_ARG_MAX, WF_EXS_EDITOR, &e));
+		CHECK(e.error == WF_EXE_UNKNOWN && e.id == WF_EX_NONE);
+		CHECK(strlen(e.name) ==
+		        (at < sizeof e.name - 1 ? at : sizeof e.name - 1));
+	}
+	free(text);
+	const char unicode[] = "go \xe6\x97\xa5\xe6\x9c\xac\xf0\x9f\x98\x80";
+	CHECK(wf_ex_parse(unicode, sizeof unicode - 1, WF_EXS_FM, &e));
+	CHECK(!strcmp(e.arg, unicode + 3));
+}
+
 int main(void)
 {
 	WfEx e;
@@ -93,5 +124,6 @@ int main(void)
 	sort_and_set_take_what_they_are_given();
 	nothing_after_an_empty_word_is_skipped();
 	a_line_with_a_nul_is_never_a_command();
+	explicit_lengths_and_terminator_boundaries();
 	return TEST_RESULT();
 }

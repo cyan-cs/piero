@@ -17,6 +17,7 @@
 #include "git/wf_gitstatus.h"
 #include "text/wf_linediff.h"
 #include "wf_test.h"
+#include "base/wf_macro.h"
 
 static WfGitEnvKind kind_of(const wchar_t *p, char *distro, size_t cap)
 {
@@ -740,7 +741,7 @@ static WfStatus fake_run(void *ctx, const WfGitRun *run, WfGitRunResult *res)
 		fake.env_prompt_off |=
 		        !wcscmp(run->extra_env[i], L"GIT_TERMINAL_PROMPT=0");
 	}
-	for (; run->args && run->args[n] && n < 40; n++) {
+	for (; n < WF_ARRAY_LEN(fake.arg) && run->args && run->args[n]; n++) {
 		wcscpy_s(fake.arg[n], 300, run->args[n]);
 	}
 	fake.nargs = n;
@@ -760,6 +761,29 @@ static WfStatus fake_run(void *ctx, const WfGitRun *run, WfGitRunResult *res)
 		return WF_OK;
 	}
 	return WF_OK;
+}
+
+static void the_fake_argument_capture_stops_before_reading_its_limit(void)
+{
+	const wchar_t
+	        *args[40]; /* No sentinel: the mock must stop at its own cap. */
+	WfGitRun run = {0};
+	WfGitRunResult result;
+	run.exe = win_git;
+	for (size_t i = 0; i < WF_ARRAY_LEN(args); i++) {
+		args[i] = L"arg";
+	}
+	run.args = args;
+	CHECK(WF_OK == fake_run(NULL, &run, &result));
+	CHECK(fake.nargs == WF_ARRAY_LEN(args));
+	for (size_t i = 0; i < WF_ARRAY_LEN(args); i++) {
+		CHECK(!wcscmp(fake.arg[i], L"arg"));
+	}
+	run.args = NULL;
+	CHECK(WF_OK == fake_run(NULL, &run, &result) && !fake.nargs);
+	args[0] = NULL;
+	run.args = args;
+	CHECK(WF_OK == fake_run(NULL, &run, &result) && !fake.nargs);
 }
 
 static bool fake_finder_yes(wchar_t *out, size_t cap)
@@ -1389,6 +1413,7 @@ int wmain(int argc, wchar_t **argv)
 		return helper_main(argc, argv);
 	}
 	paths_are_classified_by_the_environment_that_owns_them();
+	the_fake_argument_capture_stops_before_reading_its_limit();
 	a_wsl_path_becomes_a_linux_path_without_a_shell();
 	the_status_of_porcelain_v2_is_read_whole();
 	a_path_inside_an_untracked_folder_is_covered_by_it();

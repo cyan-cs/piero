@@ -190,6 +190,21 @@ target_link_libraries(test_p0_area PRIVATE p0_common)
 target_include_directories(test_p0_area PRIVATE tests)
 add_test(NAME p0_area COMMAND test_p0_area)
 
+add_executable(test_p0_area_close tests/test_p0_area_close.c)
+target_link_libraries(test_p0_area_close PRIVATE p0_common)
+target_include_directories(test_p0_area_close PRIVATE tests)
+add_test(NAME p0_area_close COMMAND test_p0_area_close)
+
+add_executable(test_p0_permissions tests/test_p0_permissions.c)
+target_link_libraries(test_p0_permissions PRIVATE p0_journal)
+target_include_directories(test_p0_permissions PRIVATE tests)
+add_test(NAME p0_permissions COMMAND test_p0_permissions)
+
+add_executable(test_e2e_ui_bounds tests/test_e2e_ui_bounds.c)
+target_include_directories(test_e2e_ui_bounds PRIVATE tests)
+target_link_libraries(test_e2e_ui_bounds PRIVATE user32 gdi32 ole32 oleaut32 uuid dwmapi)
+add_test(NAME e2e_ui_bounds COMMAND test_e2e_ui_bounds)
+
 add_executable(test_storage_win tests/test_storage_win.c)
 target_link_libraries(test_storage_win PRIVATE wfstorage p0_journal)
 target_include_directories(test_storage_win PRIVATE tests)

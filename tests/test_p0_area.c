@@ -241,11 +241,12 @@ static void test_tampered_marker(void)
 	CHECK(p0_area_track(a, L"f.txt", 0));
 
 	swprintf(marker, MAX_PATH * 2, L"%ls\\.p0-owner", root);
-	f = _wfsopen(marker, L"wb", 0x10);
+	f = p0_fopen_w(marker);
 	if (f) {
 		fputs("wfile-p0-owner v1\nnonce=0000\n", f);
 		fclose(f);
 	}
+	CHECK(NULL == p0_area_open(root));
 	CHECK(p0_area_destroy(a, rep, 512) >= 1);
 	CHECK(exists(p)); /* the nonce did not match: nothing deleted */
 	CHECK(NULL != wcsstr(rep, L"REFUSED"));

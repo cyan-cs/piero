@@ -1,0 +1,224 @@
+piero CodeQL security review — 2026-11-28
+
+調査対象と限界
+==============
+依頼の95件を台帳上の対象とし、ID・ファイル・処理が提示された12件を
+個別に調査した。基準コミットは1b683f9c8a5e133eeb47108e727a3eba82a8171f、
+作業開始時HEADは2bdb5a9。対象の自社コード8ファイルは、この2コミット間で
+変更されていないことも確認した。
+
+GitHub APIへの接続は実行環境に遮断された。外部OSS83件のSARIF、Alert ID、
+正確な位置、データフローは未取得。これらの個別判定は完了していない。
+CodeQL CLIと解析DBも利用できず、CodeQLの再解析は未実施。
+本書の分類はソースとWindows実行による判定であり、GitHubのアラート状態を
+変更・Dismissしたという意味ではない。「95件すべて問題なし」とは結論しない。
+
+集計
+====
+個別調査12件：FIXED 2、FALSE POSITIVE 6、NOT APPLICABLE 4。
+ALREADY FIXED 0、UPSTREAM 0、DEFERRED 0、UNVERIFIED 83。
+83件の内訳：libarchive 65、zstd 17、Tree-sitter 1。
+OSSの製品到達性調査は実施済み。ただし、未取得の警告を個別に対象外や
+上流修正済みと判定した件数は0。別途、依存更新案は保留として記録する。
+
+上記の警告分類とは別に、周辺で確認した所有権上の実不具合4件と、
+P0新規ファイル／領域のDACL継承リスクを修正した。以下で区別する。
+
+アラート別結果
+==============
+#13 / High / src/input/wf_exline.c / FALSE POSITIVE
+  対象：埋め込みNULを含む入力からエラー表示用の名前を取り出すループ。
+  text+len<stopがtext[len]より先に評価される。stopはmemchrが同じ入力の
+  nバイト以内で見つけた位置。末尾のlen条件は入力境界ではなく出力容量。
+  n==0、text==NULL、過大nはポインター加算前に処理される。
+  lenはsize_tで減算せず、出力は事前ゼロ化され、終端用1バイトを残す。
+  修正：出力容量チェックもループの先頭へ移し、不変条件を明示した。
+  検証：空、NULL、SIZE_MAX、1024バイトの非終端入力、各位置の埋め込みNUL、
+  終端なしq!、UTF-8引数。exline、git_ui、copy_uiが通過。
+  コマンド解釈、Vim操作、UTF-8のバイト表現を変更していない。
+
+#90 / Critical / tools/p0/p0_journal.c / FALSE POSITIVE
+  対象：wmemchr(temp.rel_payload,0,128)。Windows wchar_tは2バイト、
+  実配列も128要素。レコード長がsizeof(P0TempId)と一致することを確認して
+  から構造体全体をローカルへコピーする。検索はその配列内で完結する。
+  sizeofをバイト数としてwmemchrへ渡している処理ではない。
+  修正：全3検索をWF_ARRAY_LENに統一。wchar_t==2、INTENT==816、
+  TEMP_ID==416を静的表明し、Windows UTF-16の互換形式を固定した。
+  Linuxのwchar_t==4をそのままWindowsのディスク形式に適用できない。
+  追加防御：NULL、過大ペイロード、切り詰め長、加算オーバーフローに依存
+  しない残量判定。既存の1 MiB読取上限と書込上限を一致させた。
+  検証：recovery_journalで全切り詰め位置、NULL、UINT32_MAX、CRC破損、
+  CRCを再計算した非終端rel_payloadを検査。MANUAL判定と元ファイル保持、
+  正常AUTO_CANDIDATE／COMMITTED分類を確認した。形式の変更なし。
+
+#6 / Critical / tests/test_git_ui.c / FALSE POSITIVE
+  cwdはアプリが所有し、各置換値は_wcsdupによる別割当て。
+  wf_app_git_note_listingはcwdを解放しない。wf_app_destroyが最後の所有者。
+  同じcwd割当てを2回解放する経路は確認できなかった。
+  改善：allocate-before-releaseのローカル置換ヘルパーを使用し、
+  割当て失敗時も旧値を保持して単一のdestroy経路へ進むようにした。
+  検証：自己別名からの置換、割当て失敗時のポインターと内容保持、git_ui。
+
+#5 / Critical / tests/test_git_ui.c / FALSE POSITIVE
+  git.vcwdはcwdとは独立した所有スロット。wf_app_on_gitも入力のパスを
+  複製し、借用ポインターをそのまま所有しない。置換と最終destroyの対象は
+  異なる割当てであり、同じ割当ての二重解放は確認できなかった。
+  ただし初回vcwdの上書きで既存割当てを失う実リークを発見し修正した。
+  改善・検証：#6と同じヘルパー、エラー経路、git_ui。
+
+#3 / Critical / tests/test_git_ui.c / FALSE POSITIVE
+  #5と同じ経路。free(vcwd)後の複製元は独立したcwdであり、解放した
+  vcwdではない。wf_app_git_base_hintが返すrootはgit.rootの借用で、vcwd
+  の別名ではない。提示された位置では解放後アクセスを確認できなかった。
+  読みにくいカンマ式を上記の所有権ヘルパーに置換した。git_uiで検証。
+
+#4 / Critical / tests/test_copy_ui.c / FALSE POSITIVE
+  cwdの旧値解放と次の_wcsdupは異なる割当て。テストの最終destroyまでの
+  所有権を追跡し、提示箇所で同一割当ての二重解放は確認できなかった。
+  ただし同じRigを2回rig_openし、memsetで最初のアプリを失う実リークが
+  あった。2回目の初期化前にwf_app_destroyを追加した。
+  検証：copy_ui。元のアサーションはすべて保持。
+
+#89 / High / tools/p0/p0_common.c / NOT APPLICABLE
+#88 / High / tools/p0/p0_area.c（marker作成）/ NOT APPLICABLE
+#87 / High / tools/p0/p0_area.c（manifest追記）/ NOT APPLICABLE
+#86 / High / tests/test_p0_area.c（改ざんmarker作成）/ NOT APPLICABLE
+  上記4件の0666はWindows CRTのファイルモード。POSIXのgroup/otherの
+  書込権限として解釈することはできない。従来は明示DACLがなく、実効権限は
+  親の継承ACLまたはトークン既定DACLによる。0666だけでEveryone書込可とは
+  証明できない。一方、広い親ACLを継承する条件付きリスクは実在する。
+  修正：新規P0ファイルとジャーナルはTokenUser所有・保護DACLの単一ユーザー
+  FILE_ALL_ACCESSで作成。新規P0領域は同じDACLと子へのOICI継承を設定。
+  marker、manifest、テストの改ざん書込みも共通のファイル作成経路を使用。
+  既存の正当なファイルのDACLを書き換えない。既存P0領域もACL移行しない。
+  書込みはOPEN_ALWAYSでハンドルを得て、同じハンドルでディレクトリ、
+  最終reparse point、複数hard linkを拒否してから切り詰める。
+  CRTへの所有権移転はHANDLE→fd→FILEの順に行い、各失敗で一度だけ解放。
+  読取共有を維持し、書込／削除共有とハンドル継承は許可しない。
+  検証：p0_permissionsでEveryoneフルアクセスの親を明示作成し、
+  新規ファイル・ジャーナル・領域の所有者、保護DACL、ACE、子への継承を
+  WinAPIで検査。追記、live reader、別writer拒否、hard link先の非破壊、
+  既存ファイルACL維持、既存ジャーナルへのCREATE_NEW拒否も確認。
+  限界：同一ユーザー、管理者権限、親ディレクトリの置換権限まで排除する
+  ものではない。古い領域や既存の広いACLは自動修復しない。
+
+#15 / High / tools/e2e/piero_e2e_ui.c / FIXED
+  cleanの上限条件がs[i]読出しより後にあった。従来の呼出しは終端済みの
+  256要素タイトル／121要素UIAバッファであり、そこでの実害は未確認。
+  修正：実容量を引数に渡し、i<min(cap-1,120)を読出し前に確認。
+  cap==0では何も参照せず、空、1要素、非終端、最大長を安全に終端する。
+  2呼出しを更新。Unicodeコード単位の処理と既存の120文字制限は維持。
+  検証：e2e_ui_boundsが実際のツール実装を含めて境界と制御文字を検査。
+
+#14 / High / tests/test_git.c / FIXED
+  fake_runの引数取込みでrun->args[n]を取込み上限より先に読んでいた。
+  製品の実引数はNULL終端されるが、mock自体の上限では読出しを制限できない。
+  修正：n<WF_ARRAY_LEN(fake.arg)を最初に判定。
+  検証：NULL、空、終端なし40ポインター配列を使い、上限到達時に41番目を
+  読まず、取込み済みの40要素を維持することをgitテストで検査。
+
+追加で根本修正した実不具合
+==========================
+1. p0_area_open：markerを閉じた後、nonce、root_id、ディレクトリ同一性の
+   検証失敗からfailへ進み、同じFILEを再度閉じていた。
+   markerの所有権を検証完了まで保持し、成功時／失敗時に一度だけ閉じる。
+   読込みエラーも拒否する。単にポインターをNULLにして隠す修正ではない。
+   p0_area_closeはnonce不正、hex不正、ID不一致の3経路でclose回数を検査。
+   実クローズをテスト内で遅延し、壊れた経路でもUBを実行せず失敗を検出。
+   修正前の寿命管理だけを隔離コピーに戻した実行で3経路とも二重closeを
+   再現し、終了コード1。修正後は通過。通常Releaseだけでは検出できなかった。
+2. test_git_ui：既存git.vcwdを失う上書きリークを修正（#5参照）。
+3. test_copy_ui：再初期化時に最初のアプリを失うリークを修正（#4参照）。
+4. p0j_open：ヘッダー書込み失敗時のHANDLEリークを修正。
+   このWriteFile失敗そのものの障害注入テストは未実施。
+
+外部OSSの到達性
+==============
+根拠：src/third_party/CMakeLists.txt、src/archive/wf_archive.c、
+src/syntax/wf_syncore.c、実際のNinja製品ターゲットのコンパイルコマンド。
+コマンドとソース一覧はout/codeql-review/product-dependency-*へ保存した。
+
+libarchive 3.8.10：製品に41ソースをコンパイル。
+  ZIP、7zip、TAR、raw、gzip、xz/lzma、zstdを登録。PPMd7／8もコンパイル。
+  ZIP method 98からPPMd8デコーダーへ到達するため、PPMd8は除外不可。
+  RangeDec_Decodeの論理式はレンジ正規化の比較、短絡、副作用を含む。
+  正確なAlert位置・ルールがないため、この式だけで誤検知とは判定しない。
+  upstream CLI、test、example、archive_write_*、archive_read_disk、
+  archive_write_disk、RAR readerは製品ターゲットに含まれない。
+  ただし、その事実を未取得の65個のAlert IDへ対応付けることはできない。
+  アーカイブ入力は非信頼。列挙、プレビュー、展開が信頼境界であり、
+  worker threadはホストプロセス内で実行される。画像/PDFデコーダー用の
+  AppContainerがlibarchiveまで隔離しているとは扱わない。
+  pieroのパス検査／所有権検証は展開先保護であり、デコーダーのUAFや
+  バッファ破壊まで防ぐ保証ではない。TOCTOUやパス警告も個別の経路が必要。
+
+zstd 1.5.7：common 6、decompress 4の計10ソース。
+  ZSTD_DISABLE_ASM、ZSTD_LEGACY_SUPPORT=0、HUF_FORCE_DECOMPRESS_X1、
+  XXH_NAMESPACE=ZSTD_。圧縮側、legacy、CLI、上流testsは製品対象外。
+  pointer算術17件は位置と前提条件未取得。到達する展開コードもあるので、
+  一律対象外・安全・誤検知とは判定しない。
+
+Tree-sitter 0.27.2：src/lib.cをunity compileし、piero-syntax.dllへリンク。
+  piero.exeへ直接リンクしなくても、オンデマンドDLLから利用される。
+  ts_parser_parse_with_optionsへ非信頼なファイル本文が渡る。CLI/testsは
+  製品対象外だが、runtimeの1件かどうか不明なのでUNVERIFIED。
+
+上流確認
+========
+libarchive 3.8.11は上流がsecurity and bugfix releaseと明記している。
+更新候補として優先評価する。ただし65件の解消を保証する情報はない。
+承認を伴わない依存更新／外部ソース改変は行っていない。
+更新前に3.8.10との差分、Windows設定ヘッダー、読取形式、互換性、
+ライセンス台帳・ハッシュ、パッケージサイズ、既存アーカイブ回帰を確認する。
+
+既知advisoryの比較例：ZIP writerのGHSA-xgqq-r5j8-3mchは3.8.8以降修正、
+RAR readerのGHSA-6vpf-5947-22g5は3.8.0以降修正。現在3.8.10で、かつ対象
+writer／RAR readerは未使用。ただし今回の95件との同一性は確認していない。
+zstd／Tree-sitterの公開advisoryが見つからないことも、安全の証明にしない。
+独自上流パッチは0。上流への送信・公開報告も実施していない。
+
+検証と残る作業
+==============
+MSVC Debug、MSVC Release、clang-cl Release、clang-cl Debug ASan+UBSanの
+全ターゲットビルドを実施。C17を維持。関連単体・統合・E2E・editor_perfを
+実行し、最終結果はout/codeql-reviewのXML／ログを参照。
+広い関連テストの結果：clang-cl Release 32 PASS/1 SKIP、MSVC Debug
+22 PASS/1 SKIP、MSVC Release 23 PASS/1 SKIP、ASan+UBSan 23 PASS/1 SKIP。
+最終のテストコード修正後にも、主要10件を4構成すべてで再実行し全件PASS。
+失敗0。集計はout/codeql-review/validation-summary.jsonに保存した。
+product_tuiは前提条件によりSKIP。MSVC Debugのcopyengine_winもSKIP。
+スキップを通過として数えない。CI全400件のローカル再実行は行っていない。
+
+MSVC /analyzeも全ターゲットで実行。成功終了したが既存警告が多数あり、
+warning-freeではない。exlineのcount追跡、既存P0の大きいスタック、
+BCrypt戻り値、E2E画像バッファなどの指摘を残す。新規テストで見つかった
+不完全fixtureの後続使用は明示的に拒否するよう修正した。
+
+性能：製品の通常入力ループ、レンダリング、コピー、非同期設計は変更なし。
+新しいトークン／DACL処理は開発ツールの出力ファイル・領域作成時だけ。
+常駐、ポーリング、新依存は追加していない。editor_perfの基準は変更せず
+通過を確認したが、ACL作成コストの独立した前後比較は未実施。
+
+変更ファイル：cmake/tests.cmake、src/input/wf_exline.c、
+tools/e2e/piero_e2e_ui.c、tools/p0/p0_area.c、p0_common.c/.h、p0_journal.c/.h、
+tests/test_copy_ui.c、test_exline.c、test_git.c、test_git_ui.c、test_p0_area.c、
+test_recovery_journal.c、test_p0_area_close.c、test_p0_permissions.c、
+test_e2e_ui_bounds.c、本書、別紙解析構成案。
+作業中に存在する.gitignoreの変更は本修正の検証対象へ含めていない。
+
+残る優先事項：83件のSARIF/Alert一覧とcodeFlowsを取得し、製品コンパイル
+対象・プリプロセッサ・到達経路へ照合する。特に到達するlibarchiveの
+UAF/overflow、PPMd8、zstd展開を優先。Windows実ビルドのCodeQLを再実行し、
+修正前後の結果を比較する。前提条件が整うCIでproduct_tuiを再実行する。
+それまではOSSを含めたセキュリティ監査完了とはしない。
+
+参照した一次資料
+================
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/file-permission-constants?view=msvc-170
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/sopen-wsopen
+https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+https://github.com/libarchive/libarchive/releases/tag/v3.8.11
+https://github.com/libarchive/libarchive/security/advisories/GHSA-xgqq-r5j8-3mch
+https://github.com/libarchive/libarchive/security/advisories/GHSA-6vpf-5947-22g5
+https://github.com/meta/zstd/security
+https://github.com/tree-sitter/tree-sitter/security/advisories

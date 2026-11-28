@@ -1,0 +1,43 @@
+piero CodeQL解析構成案 — コード修正と分離した提案
+================================================
+現行は依頼にあるCodeQL 2.27.6 / ubuntu-latest / C/C++ / build-mode:none。
+追跡されているworkflow内にはCodeQL jobがなく、Default Setupの可能性が
+ある。管理画面の実設定は取得できていないので断定しない。
+
+noneはコンパイルフラグとincludeを推測する。pieroはNOT WIN32ならCMakeを
+停止し、Windows SDK、UNICODE、WinAPI、Windows wchar_t、生成ヘッダーを使う。
+POSIXモデルの権限や型だけで実Windows製品の安全性を判断するのは不十分。
+一方、今回の全警告をLinux差異だけで誤検知とする根拠にもならない。
+
+Product Analysis
+  Windows / manual。実際のリリースworkflowに合わせたコンパイラとSDK、
+  Release、C17、BUILD_TESTING=OFF、通常のWF_SANITIZE=OFFを使用。
+  現行validation.ymlのMSVC／clangマトリクスと実リリース成果物を対応付け、
+  必要なら両コンパイラを別categoryにする。製品exeに加え、遅延ロードする
+  piero-syntax.dllと公式grammar DLL、実依存のコンパイルも含める。
+  codeql init後に新規build directoryでconfigure/buildし、コンパイラキャッシュ
+  を無効化する。既存の成果物を再利用して抽出0件となる状態を避ける。
+
+Test Analysis
+  Windows / manual / BUILD_TESTING=ON。同じWindows SDKとコンパイラで、
+  tests、P0、必要なE2E toolを含める。通常CMakeに入らない独立ツールは
+  明示ビルドする。製品解析とは別categoryを使い、検出結果を保持する。
+  単に実行したテストだけでなく、コンパイルされたコード全体を解析する。
+
+Full Analysis
+  現行none相当を補完解析として残し、上流CLI/tests/未使用formatsを含む
+  ソースにも警告を出す。必要ならLinuxの上流実ビルドを別途追加する。
+  製品と非製品を台帳で分類し、解析から黙って除外して警告数を下げない。
+
+移行前後でCodeQLバージョン、query suiteを揃え、category別SARIFと抽出ログ、
+コンパイル対象を保管する。Windowsサポート、コンパイラ対応、実際のSDKと
+clang 23.1.3の抽出可否は、導入時に固定したCodeQLで確認が必要。
+Default SetupとAdvanced Setupの併存・重複設定はGitHubの設定を確認してから
+移行する。警告の抑制、Dismiss、自動除外は本案に含めない。
+
+この作業ではworkflow変更、Default Setup変更、解析結果アップロードは
+実施していない。本案の導入検証と、本体の安全性修正は別コミットにする。
+
+一次資料：
+https://docs.github.com/en/code-security/reference/code-scanning/codeql/build-options-for-compiled-languages
+https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/manage-your-configuration/codeql-for-compiled-languages

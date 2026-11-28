@@ -1,6 +1,7 @@
 #include <windows.h>
 
 #include "p0_area.h"
+#include "p0_common.h"
 
 #include <bcrypt.h>
 #include <io.h>
@@ -209,7 +210,7 @@ static int write_marker(P0Area *a, const char *run_id)
 	FILE *f;
 
 	swprintf(p, P0A_PATH, L"%ls\\%ls", a->root, MARKER);
-	f = _wfsopen(p, L"wb", _SH_DENYWR);
+	f = p0_fopen_w(p);
 	if (!f) {
 		return 0;
 	}
@@ -287,7 +288,7 @@ static int manifest_append(P0Area *a, const wchar_t *rel, int is_dir)
 	}
 
 	swprintf(p, P0A_PATH, L"%ls\\%ls", a->root, MANIFEST);
-	f = _wfsopen(p, L"ab", _SH_DENYWR);
+	f = p0_fappend_w(p);
 	if (!f) {
 		free(u8);
 		return 0;
@@ -325,6 +326,8 @@ P0Area *p0_area_create(const wchar_t *base, const char *run_id)
 	P0Area *a = calloc(1, sizeof *a);
 	BYTE nonce[NONCE_BYTES];
 	wchar_t name[96];
+	PSECURITY_DESCRIPTOR sd = NULL;
+	SECURITY_ATTRIBUTES security = {sizeof security, NULL, FALSE};
 
 	if (!a) {
 		return NULL;
@@ -343,15 +346,21 @@ P0Area *p0_area_create(const wchar_t *base, const char *run_id)
 	}
 	/* CreateDirectoryW fails on an existing directory: an area is always
 	 * new */
-	if (!CreateDirectoryW(a->root, NULL)) {
+	if (!p0_private_security(1, &sd)) {
+		goto fail;
+	}
+	security.lpSecurityDescriptor = sd;
+	if (!CreateDirectoryW(a->root, &security)) {
 		goto fail;
 	}
 	if (!dir_identity(a->root, a->id, a->final_root, P0A_PATH) ||
 	        !write_marker(a, run_id)) {
 		goto fail;
 	}
+	LocalFree(sd);
 	return a;
 fail:
+	LocalFree(sd);
 	free(a);
 	return NULL;
 }
@@ -381,8 +390,8 @@ P0Area *p0_area_open(const wchar_t *root)
 			snprintf(idhex, sizeof idhex, "%s", line + 8);
 		}
 	}
-	fclose(f);
-	if (strlen(a->nonce) != NONCE_BYTES * 2 || 48 != strlen(idhex)) {
+	if (ferror(f) || strlen(a->nonce) != NONCE_BYTES * 2 ||
+	        48 != strlen(idhex)) {
 		goto fail;
 	}
 	{
@@ -403,6 +412,8 @@ P0Area *p0_area_open(const wchar_t *root)
 		goto fail;
 	}
 	swprintf(p, P0A_PATH, L"%ls\\%ls", root, MANIFEST);
+	/* The marker remains owned by fail until validation has succeeded. */
+	fclose(f);
 	f = _wfsopen(p, L"rb", _SH_DENYNO);
 	if (f) {
 		while (fgets(line, sizeof line, f)) {

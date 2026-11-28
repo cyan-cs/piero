@@ -238,8 +238,8 @@ bool wf_ex_parse(const char *text, size_t n, WfExScope scope, WfEx *out)
 	if (n && memchr(text, 0, n)) {
 		const char *stop = memchr(text, 0, n);
 
-		for (len = 0; text + len < stop && !blank(text[len]) &&
-		        len < sizeof out->name - 1;
+		for (len = 0; len < sizeof out->name - 1 && text + len < stop &&
+		        !blank(text[len]);
 		        len++) {
 			out->name[len] = text[len];
 		}

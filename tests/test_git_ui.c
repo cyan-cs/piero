@@ -67,6 +67,37 @@ static WfStatus repo(void *ctx, uint32_t gen, const wchar_t *root, int mode)
 	return r->repo_result;
 }
 
+/* Test path fields are owning slots. Allocate before release, including when
+ * source aliases the old slot, and leave the slot unchanged on failure. */
+static bool refuse_path_allocation;
+static bool replace_owned_path(wchar_t **slot, const wchar_t *source)
+{
+	wchar_t *next = refuse_path_allocation ? NULL : _wcsdup(source);
+	if (!next) {
+		return false;
+	}
+	free(*slot);
+	*slot = next;
+	return true;
+}
+
+static void an_owned_test_path_survives_aliasing_and_allocation_failure(void)
+{
+	wchar_t *path = _wcsdup(L"keep");
+	CHECK(path);
+	if (!path) {
+		return;
+	}
+	CHECK(replace_owned_path(&path, path));
+	CHECK(!wcscmp(path, L"keep"));
+	wchar_t *old = path;
+	refuse_path_allocation = true;
+	CHECK(!replace_owned_path(&path, L"replacement"));
+	refuse_path_allocation = false;
+	CHECK(path == old && !wcscmp(path, L"keep"));
+	free(path);
+}
+
 static void rig_open(Rig *r, const wchar_t *start, const wchar_t *root_for)
 {
 	WfGitPort p;
@@ -668,8 +699,10 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 	        orig, sizeof orig));
 	CHECK('M' == letter);
 	/* into a folder below it: asked for the nearest .git, nothing hidden is shown */
-	free(r.a.cwd);
-	r.a.cwd = _wcsdup(L"C:\\Users\\dev\\Docs");
+	if (!replace_owned_path(&r.a.cwd, L"C:\\Users\\dev\\Docs")) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
 	r.a.now_ms += 100;
 	wf_app_git_note_listing(&r.a, false);
 	CHECK(WF_GIT_REPO_LOCATE == r.mode &&
@@ -707,8 +740,10 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 		CHECK('M' == wf_app_git_letter(&r.a, &stand_in));
 	}
 	/* a deeper folder holds its own repository: that one is asked about */
-	free(r.a.cwd);
-	r.a.cwd = _wcsdup(L"C:\\Users\\dev\\Docs\\sub");
+	if (!replace_owned_path(&r.a.cwd, L"C:\\Users\\dev\\Docs\\sub")) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
 	r.a.now_ms += 100;
 	wf_app_git_note_listing(&r.a, false);
 	CHECK(WF_GIT_REPO_LOCATE == r.mode);
@@ -729,6 +764,7 @@ static void a_nested_repository_below_a_found_root_is_noticed(void)
 	/* the parent's table is not used for the nested repository's files */
 	CHECK(!wf_app_git_file(&r.a, L"C:\\Users", "dev/Docs/x.txt", &letter,
 	        orig, sizeof orig));
+done:
 	wf_app_destroy(&r.a);
 }
 
@@ -805,23 +841,34 @@ static void the_editor_does_not_use_a_parent_root_before_the_folder_is_checked(
 	wf_gitanswer_free(&a);
 	CHECK(WF_GENV_WINDOWS == wf_gitenv_classify_text(file, &env));
 	/* the folder of the file is the one on screen and has been checked */
-	free(r.a.cwd);
-	r.a.cwd = _wcsdup(L"C:\\Users\\dev\\Docs\\sub");
-	r.a.git.vcwd = _wcsdup(L"C:\\Users\\dev\\Docs\\sub");
+	if (!replace_owned_path(&r.a.cwd, L"C:\\Users\\dev\\Docs\\sub")) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
+	if (!replace_owned_path(&r.a.git.vcwd, L"C:\\Users\\dev\\Docs\\sub")) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
 	CHECK(wf_app_git_base_hint(&r.a, &env, file, &root, rel, sizeof rel,
 	        &expect_new, orig, sizeof orig));
 	CHECK(!strcmp(rel, "dev/Docs/sub/f.c") && !wcscmp(root, L"C:\\Users"));
 	/* the screen moved into it and the check is still out: nothing is used */
-	free(r.a.git.vcwd);
-	r.a.git.vcwd = _wcsdup(L"C:\\Users\\dev");
+	if (!replace_owned_path(&r.a.git.vcwd, L"C:\\Users\\dev")) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
 	CHECK(!wf_app_git_base_hint(&r.a, &env, file, &root, rel, sizeof rel,
 	        &expect_new, orig, sizeof orig));
 	/* a file of another environment or outside the root is never matched */
 	CHECK(WF_GENV_WINDOWS ==
 	        wf_gitenv_classify_text(L"D:\\other\\f.c", &env));
-	r.a.git.vcwd = (free(r.a.git.vcwd), _wcsdup(r.a.cwd));
+	if (!replace_owned_path(&r.a.git.vcwd, r.a.cwd)) {
+		CHECK_FAIL("test path allocation failed");
+		goto done;
+	}
 	CHECK(!wf_app_git_base_hint(&r.a, &env, L"D:\\other\\f.c", &root, rel,
 	        sizeof rel, &expect_new, orig, sizeof orig));
+done:
 	wf_app_destroy(&r.a);
 }
 
@@ -871,6 +918,7 @@ static void a_reload_while_the_answer_is_awaited_is_asked_again_after_it(void)
 
 int main(void)
 {
+	an_owned_test_path_survives_aliasing_and_allocation_failure();
 	outside_a_work_tree_nothing_is_asked_and_nothing_shown();
 	the_letters_appear_with_the_answer_of_the_newest_request();
 	changed_names_and_their_folders_take_a_colour();

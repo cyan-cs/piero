@@ -2,6 +2,7 @@
 #include "test_recovery_win.c"
 #undef main
 #include "../tools/p0/p0_journal.h"
+#include <stddef.h>
 static void packed_id(uint8_t out[24], const FILE_ID_INFO *id)
 {
 	memcpy(out, &id->VolumeSerialNumber, 8);
@@ -38,12 +39,57 @@ int main(void)
 	        p0j_flush(&journal));
 	CHECK(p0j_append(&journal, P0J_TEMP_ID, &temp, sizeof temp) &&
 	        p0j_flush(&journal));
+	{
+		uint64_t written = journal.written;
+		CHECK(!p0j_append(&journal, P0J_INTENT, NULL, 1));
+		CHECK(!p0j_append(&journal, P0J_INTENT, &intent, UINT32_MAX));
+		CHECK(written == journal.written);
+	}
 	p0j_close(&journal);
 	h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
 	        OPEN_EXISTING, 0, NULL);
 	CHECK(INVALID_HANDLE_VALUE != h &&
 	        ReadFile(h, bytes, sizeof bytes, &got, NULL));
 	CloseHandle(h);
+	const size_t journal_size = 8 + 16 + sizeof intent + 16 + sizeof temp;
+	if (got != journal_size || journal_size > sizeof bytes) {
+		CHECK_FAIL("journal fixture is incomplete");
+		keep(&f);
+		return TEST_RESULT();
+	}
+	{
+		P0Rec records[2];
+		uint8_t changed[sizeof bytes];
+		size_t n, offset;
+		uint32_t crc, huge = UINT32_MAX;
+		if (2 != p0j_parse(bytes, got, records, 2)) {
+			CHECK_FAIL("journal fixture records are invalid");
+			keep(&f);
+			return TEST_RESULT();
+		}
+		CHECK(0 == p0j_parse(NULL, got, records, 2));
+		CHECK(0 == p0j_parse(bytes, got, NULL, 2));
+		CHECK(0 == p0j_parse(bytes, got, NULL, 0));
+		for (n = 0; n < got; n++) {
+			CHECK(p0j_parse(bytes, n, records, 2) < 2);
+		}
+		CHECK(2 == p0j_parse(bytes, got, records, 2));
+		offset = (size_t)(records[1].data - bytes);
+		memcpy(changed, bytes, got);
+		memset(changed + offset + offsetof(P0TempId, rel_payload), 'x',
+		        sizeof temp.rel_payload);
+		crc = p0j_crc32(changed + offset - 4, 4 + sizeof temp);
+		memcpy(changed + offset + sizeof temp, &crc, sizeof crc);
+		p0r_scan(changed, got, f.lab.root, &scan);
+		CHECK(P0S_MANUAL == scan.cls);
+		CHECK(INVALID_FILE_ATTRIBUTES != GetFileAttributesW(f.payload));
+		memcpy(changed, bytes, got);
+		memcpy(changed + offset - 8, &huge, sizeof huge);
+		CHECK(1 == p0j_parse(changed, got, records, 2));
+		memcpy(changed, bytes, got);
+		changed[journal_size - 1] ^= 1;
+		CHECK(1 == p0j_parse(changed, got, records, 2));
+	}
 	p0r_scan(bytes, got, f.lab.root, &scan);
 	CHECK(P0S_AUTO_CANDIDATE == scan.cls);
 	CHECK(MoveFileW(f.payload, f.final));

@@ -1,4 +1,5 @@
 #include "p0_journal.h"
+#include "p0_common.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -8,6 +9,7 @@
 
 #include "path/wf_canonical_win.h"
 #include "recovery/wf_recovery.h"
+#include "base/wf_macro.h"
 
 #define MAGIC 0x43455257u /* "WREC" little-endian */
 #define FILE_HDR "WJRN\1\0\0\0"
@@ -44,17 +46,29 @@ uint32_t p0j_crc32(const void *p, size_t n)
 int p0j_open(P0Journal *j, const wchar_t *path)
 {
 	DWORD wr;
+	PSECURITY_DESCRIPTOR sd = NULL;
+	SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, FALSE};
 
 	memset(j, 0, sizeof *j);
+	j->h = INVALID_HANDLE_VALUE;
+	if (!p0_private_security(0, &sd)) {
+		return 0;
+	}
+	sa.lpSecurityDescriptor = sd;
 	/* READ sharing only: nobody else may write or delete it while we hold
 	 * it */
-	j->h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+	j->h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, &sa,
 	        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	DWORD error = GetLastError();
+	LocalFree(sd);
 	if (INVALID_HANDLE_VALUE == j->h) {
+		SetLastError(error);
 		return 0;
 	}
 	if (!WriteFile(j->h, FILE_HDR, FILE_HDR_LEN, &wr, NULL) ||
 	        FILE_HDR_LEN != wr) {
+		CloseHandle(j->h);
+		j->h = INVALID_HANDLE_VALUE;
 		return 0;
 	}
 	j->written = FILE_HDR_LEN;
@@ -63,6 +77,10 @@ int p0j_open(P0Journal *j, const wchar_t *path)
 
 int p0j_append(P0Journal *j, P0JType type, const void *payload, uint32_t len)
 {
+	if (!j || !j->h || j->h == INVALID_HANDLE_VALUE || len > (1u << 20) ||
+	        (len && !payload)) {
+		return 0;
+	}
 	size_t total = 4 + 4 + 4 + (size_t)len + 4;
 	uint8_t *rec = malloc(total);
 	uint32_t magic = MAGIC, crc;
@@ -76,7 +94,9 @@ int p0j_append(P0Journal *j, P0JType type, const void *payload, uint32_t len)
 	memcpy(rec + 4, &len, 4);
 	rec[8] = (uint8_t)type;
 	rec[9] = rec[10] = rec[11] = 0;
-	memcpy(rec + 12, payload, len);
+	if (len) {
+		memcpy(rec + 12, payload, len);
+	}
 	crc = p0j_crc32(rec + 8, 4 + (size_t)len);
 	memcpy(rec + 12 + len, &crc, 4);
 	ok = WriteFile(j->h, rec, (DWORD)total, &wr, NULL) && wr == total;
@@ -108,16 +128,17 @@ size_t p0j_parse(const uint8_t *buf, size_t n, P0Rec *out, size_t max)
 {
 	size_t pos = FILE_HDR_LEN, count = 0;
 
-	if (n < FILE_HDR_LEN || 0 != memcmp(buf, FILE_HDR, FILE_HDR_LEN)) {
+	if (!buf || (!out && max) || n < FILE_HDR_LEN ||
+	        0 != memcmp(buf, FILE_HDR, FILE_HDR_LEN)) {
 		return 0;
 	}
-	while (count < max && pos + 12 <= n) {
+	while (count < max && n - pos >= 16) {
 		uint32_t magic, len, crc;
 
 		memcpy(&magic, buf + pos, 4);
 		memcpy(&len, buf + pos + 4, 4);
 		if (MAGIC != magic || len > (1u << 20) ||
-		        pos + 12 + (size_t)len + 4 > n) {
+		        (size_t)len > n - pos - 16) {
 			break; /* torn or absent tail */
 		}
 		memcpy(&crc, buf + pos + 12 + len, 4);
@@ -265,8 +286,9 @@ static void classify_against_disk(
 	WfCanonicalPath actual = {0}, expected = {0};
 	HANDLE h = INVALID_HANDLE_VALUE;
 
-	if (!wmemchr(intent.dest_parent, 0, 260) ||
-	        !wmemchr(intent.name, 0, 128) || !intent.name[0] ||
+	if (!wmemchr(intent.dest_parent, 0, WF_ARRAY_LEN(intent.dest_parent)) ||
+	        !wmemchr(intent.name, 0, WF_ARRAY_LEN(intent.name)) ||
+	        !intent.name[0] ||
 	        !wf_canonical_normalize(intent.dest_parent, &expected.path)) {
 		return;
 	}
@@ -306,7 +328,7 @@ static void classify_against_disk(
 		                : "durable INTENT; no transaction created");
 		goto done;
 	}
-	if (!wmemchr(temp.rel_payload, 0, 128)) {
+	if (!wmemchr(temp.rel_payload, 0, WF_ARRAY_LEN(temp.rel_payload))) {
 		goto done;
 	}
 	memcpy(out->temp_payload_id, temp.payload_id, 24);
