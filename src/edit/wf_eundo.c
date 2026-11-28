@@ -36,12 +36,14 @@ void wf_un_group_begin(WfUndo *u)
 {
 	if (!u->open_group) {
 		u->open_group = u->next_group++;
+		u->open_bytes = 0;
 	}
 }
 
 void wf_un_group_end(WfUndo *u)
 {
 	u->open_group = 0;
+	u->open_bytes = 0;
 }
 
 static size_t rec_bytes(const WfURec *r)
@@ -87,6 +89,9 @@ static void trim(WfUndo *u)
 	/* leave a little room so that trimming does not run on every push */
 	while (drop + 1 < u->pos &&
 	        u->bytes - freed > u->max_bytes - u->max_bytes / 8) {
+		if (u->open_group && u->rec[drop].group == u->open_group) {
+			break;
+		}
 		freed += rec_bytes(&u->rec[drop]);
 		drop++;
 	}
@@ -210,6 +215,16 @@ static bool try_merge(WfUndo *u, WfURec *r)
 WfStatus wf_un_push(WfUndo *u, WfURec *r)
 {
 	size_t i;
+	u->capacity_refused = false;
+	/* Keep an Insert transaction whole. Refuse the next edit explicitly if
+	 * it cannot fit, before throwing away redo or any existing record. */
+	if (u->open_group && u->open_bytes && u->max_bytes &&
+	        (u->open_bytes >= u->max_bytes ||
+	                rec_bytes(r) > u->max_bytes - u->open_bytes)) {
+		rec_free(r);
+		u->capacity_refused = true;
+		return WF_E_RANGE;
+	}
 
 	/* room first: a push that fails must not have thrown the redo history
 	 * away for an edit that is then taken back */
@@ -255,6 +270,9 @@ WfStatus wf_un_push(WfUndo *u, WfURec *r)
 	memset(r, 0, sizeof *r);
 	u->pos = u->n;
 	u->bytes += rec_bytes(&u->rec[u->n - 1]);
+	if (u->open_group) {
+		u->open_bytes += rec_bytes(&u->rec[u->n - 1]);
+	}
 	trim(u);
 	return WF_OK;
 }

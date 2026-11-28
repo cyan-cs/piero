@@ -164,6 +164,14 @@ struct WfEditSession
 	bool msg_error;
 	bool saved_since;
 	bool clip_local_only; /* the system refused our last copy or cut */
+	struct
+	{
+		char *text;
+		size_t n;
+		bool chain;
+		bool action;
+		const WfBuffer *buffer;
+	} nano_cut;
 	int rows, cols;
 	size_t help_top;
 
@@ -173,6 +181,11 @@ struct WfEditSession
 	bool vim_insert;    /* modal profile: typing, not commands */
 	WfVim vim;          /* operators, Visual mode, registers, macros */
 	unsigned vim_count; /* the count typed before the command being run */
+	WfEvent input
+	        [64]; /* ordered type-ahead; a full queue refuses ownership */
+	size_t input_n;
+	bool input_draining;
+	WfStatus input_notice;
 	uint64_t now_ms;
 	/* A long word motion runs in slices on the event loop. The text and the
 	 * visible cursor stay unchanged until the result is complete. */
@@ -182,7 +195,7 @@ struct WfEditSession
 		WfBuffer *buffer;
 		WfPos from;
 		uint64_t gen;
-		bool active, extend;
+		bool active, extend, deleting;
 	} motion;
 	char exhist[WF_ES_HISTORY][WF_ES_INPUT_MAX];
 	size_t exhist_n, exhist_pos;

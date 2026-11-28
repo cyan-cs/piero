@@ -97,6 +97,9 @@ typedef enum
 	WF_CMD_VIM_PLAY,        /* @ */
 	WF_CMD_VIM_DOT,         /* . */
 	WF_CMD_MD_PREVIEW,      /* the Markdown preview pane (DR-DRAFT-025) */
+	WF_CMD_DELETE_WORD_RIGHT,
+	WF_CMD_SYSTEM_COPY,
+	WF_CMD_SYSTEM_PASTE,
 	WF_CMD_LAST
 } WfEdCmd;
 

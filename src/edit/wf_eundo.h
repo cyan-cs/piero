@@ -47,9 +47,11 @@ typedef struct
 	size_t bytes, max_bytes;
 	uint32_t next_group;
 	uint32_t open_group; /* 0 = none */
+	size_t open_bytes;
 	size_t clean_pos;
 	bool clean_lost;
-	bool truncated; /* the oldest history was dropped */
+	bool truncated;        /* the oldest history was dropped */
+	bool capacity_refused; /* last push could not keep the open group whole */
 } WfUndo;
 
 void wf_un_init(WfUndo *u, size_t max_bytes);

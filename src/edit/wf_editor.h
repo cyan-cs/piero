@@ -126,6 +126,11 @@ WfStatus wf_ed_type(WfEditor *e, uint32_t cp);
 /* Pasted or inserted text: control characters are dropped, breaks follow the
  * file. Replaces the selection. One undo step. */
 WfStatus wf_ed_insert_text(WfEditor *e, const char *utf8, size_t n);
+/* Explicit range edit. Success clears selection; failure preserves cursor,
+ * selection, clipboard and history. Used by modal operators after resolving
+ * their range without temporarily moving the real cursor. */
+WfStatus wf_ed_replace_range(
+        WfEditor *e, WfPos from, WfPos to, const char *utf8, size_t n);
 /* Puts a saved text in place of the whole text, byte for byte: control
  * characters and every kind of line break stay as they were saved. One undo
  * step. */

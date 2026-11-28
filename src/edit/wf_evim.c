@@ -1,10 +1,9 @@
 /*
  * Vim's Normal mode beyond single keys. See wf_evim.h.
  *
- * An operator waits for a motion; the motion is measured by moving the real
- * cursor and putting it back, then the range goes through the ordinary Copy
- * and Cut of the session, so undo, the clipboard and the read-only checks are
- * the ones every other edit has.
+ * Operators resolve a range before committing text and typed registers.
+ * Long w/b motions and macro playback yield to the event loop; provisional
+ * positions never change the document or visible selection.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -26,8 +25,10 @@ void wf_vim_free(WfVim *v)
 		free(v->regs[i].text);
 		free(v->macro[i].ev);
 	}
+	free(v->unnamed.text);
 	free(v->dot);
 	free(v->cand);
+	free(v->playback.ev);
 	wf_vim_init(v);
 }
 
@@ -53,7 +54,8 @@ bool wf_vim_is_cmd(WfEdCmd cmd)
 
 static size_t last_line(const WfEditor *ed)
 {
-	return ed->text.n ? ed->text.n - 1 : 0;
+	size_t last = ed->text.n ? ed->text.n - 1 : 0;
+	return last && !ed->text.lines[last].len ? last - 1 : last;
 }
 
 static bool pos_before(WfPos a, WfPos b)
@@ -61,27 +63,23 @@ static bool pos_before(WfPos a, WfPos b)
 	return a.line < b.line || (a.line == b.line && a.col < b.col);
 }
 
-/* Where the cursor lands after `n` steps of `mv`; the cursor itself is put back. */
-static WfPos motion_target(WfEditor *ed, WfMove mv, unsigned n)
+void wf_vim_normal_cursor(WfEditSession *s)
 {
-	WfPos cur = ed->cur, anchor = ed->anchor, t;
-	bool has = ed->has_anchor, mark = ed->mark, want = ed->want_valid;
-	size_t cells = ed->want_cells;
-
-	for (unsigned i = 0; i < n; i++) {
-		wf_ed_move(ed, mv, false, 0);
+	WfBuffer *b = wf_es_buffer(s);
+	if (!b || s->vim_insert) {
+		return;
 	}
-	t = ed->cur;
-	ed->cur = cur;
-	ed->anchor = anchor;
-	ed->has_anchor = has;
-	ed->mark = mark;
-	ed->want_valid = want;
-	ed->want_cells = cells;
-	return t;
+	WfEditor *ed = &b->ed;
+	size_t last = last_line(ed);
+	if (ed->cur.line > last) {
+		ed->cur.line = last;
+	}
+	const WfELine *l = &ed->text.lines[ed->cur.line];
+	if (ed->cur.col >= l->len) {
+		ed->cur.col = l->len ? wf_et_col_prev(l, l->len) : 0;
+	}
 }
 
-/* The lines l1..l2 as the clip holds them: each one with its break. */
 static char *lines_text(const WfEditor *ed, size_t l1, size_t l2, size_t *n)
 {
 	size_t total = 0, at = 0;
@@ -90,7 +88,7 @@ static char *lines_text(const WfEditor *ed, size_t l1, size_t l2, size_t *n)
 	for (size_t i = l1; i <= l2; i++) {
 		total += ed->text.lines[i].len + 1;
 	}
-	out = malloc(total ? total : 1);
+	out = wf_et_malloc(total ? total : 1);
 	if (!out) {
 		*n = 0;
 		return NULL;
@@ -104,181 +102,233 @@ static char *lines_text(const WfEditor *ed, size_t l1, size_t l2, size_t *n)
 	return out;
 }
 
-static void keep_register(WfEditSession *s, const WfEditor *ed)
+/* Resolve and allocate all register updates before changing the document.
+ * The old text, cursor, selection and registers survive every failure. */
+static WfEsResult apply_range(WfEditSession *s,
+        char op,
+        WfPos from,
+        WfPos to,
+        char *text,
+        size_t n,
+        bool lines)
 {
 	WfVim *v = &s->vim;
-
-	if (v->reg >= 0 && ed->clip) {
-		size_t old = v->append && v->regs[v->reg].text
-		        ? v->regs[v->reg].n
-		        : 0;
-		char *copy = malloc(old + ed->clip_n ? old + ed->clip_n : 1);
-
-		if (copy) {
-			if (old) { /* "A: the new text follows what the register holds */
-				memcpy(copy, v->regs[v->reg].text, old);
-			}
-			memcpy(copy + old, ed->clip, ed->clip_n);
-			free(v->regs[v->reg].text);
-			v->regs[v->reg].text = copy;
-			v->regs[v->reg].n = old + ed->clip_n;
-			v->regs[v->reg].lines =
-			        ed->clip_line || (old && v->regs[v->reg].lines);
+	WfEditor *ed = &wf_es_buffer(s)->ed;
+	char *named = NULL, *clip = NULL;
+	size_t named_n = n;
+	bool named_lines = lines;
+	WfStatus st = WF_OK;
+	int reg = v->reg;
+	uint32_t group = ed->undo.open_group, next_group = ed->undo.next_group;
+	size_t group_bytes = ed->undo.open_bytes;
+	if ('y' != op && ed->read_only) {
+		st = WF_E_ACCESS;
+		goto fail;
+	}
+	if (!text) {
+		st = wf_et_read(&ed->text, from, to, &text, &n);
+		named_n = n;
+		if (WF_OK != st) {
+			goto fail;
+		}
+	}
+	clip = wf_et_malloc(n ? n : 1);
+	if (!clip) {
+		st = WF_E_NOMEM;
+		goto fail;
+	}
+	memcpy(clip, text, n);
+	if (reg >= 0) {
+		WfVimRegister *old = &v->regs[reg];
+		size_t prefix = v->append ? old->n : 0;
+		named_lines = lines || (prefix && old->lines);
+		bool separator =
+		        prefix && named_lines && old->text[prefix - 1] != '\n';
+		bool ending = named_lines && n && text[n - 1] != '\n';
+		if (prefix > SIZE_MAX - 2 || n > SIZE_MAX - 2 - prefix ||
+		        (ed->opt.max_bytes &&
+		                (prefix > ed->opt.max_bytes ||
+		                        n > ed->opt.max_bytes - prefix))) {
+			st = WF_E_RANGE;
+			goto fail;
+		}
+		named_n = prefix + n + (separator ? 1 : 0) + (ending ? 1 : 0);
+		named = wf_et_malloc(named_n ? named_n : 1);
+		if (!named) {
+			st = WF_E_NOMEM;
+			goto fail;
+		}
+		if (prefix) {
+			memcpy(named, old->text, prefix);
+		}
+		size_t at = prefix;
+		if (separator) {
+			named[at++] = '\n';
+		}
+		memcpy(named + at, text, n);
+		if (ending) {
+			named[at + n] = '\n';
+		}
+	}
+	if ('y' != op) {
+		if ('c' == op) {
+			wf_un_group_begin(&ed->undo);
+		}
+		st = wf_ed_replace_range(ed, from, to, NULL, 0);
+		if (WF_OK != st) {
+			goto fail;
+		}
+	} else {
+		ed->cur = from;
+		wf_ed_clear_selection(ed);
+		ed->want_valid = false;
+	}
+	free(v->unnamed.text);
+	v->unnamed = (WfVimRegister){text, n, lines};
+	free(ed->clip);
+	ed->clip = clip;
+	ed->clip_n = n;
+	ed->clip_line = lines;
+	if (reg >= 0) {
+		free(v->regs[reg].text);
+		v->regs[reg] = (WfVimRegister){named, named_n, named_lines};
+	}
+	if ('c' == op) {
+		s->vim_insert = true;
+	} else if ('d' == op) {
+		wf_vim_normal_cursor(s);
+		if (ed->undo.pos) {
+			ed->undo.rec[ed->undo.pos - 1].after = ed->cur;
 		}
 	}
 	v->reg = -1;
 	v->append = false;
-}
-
-bool wf_vim_paste_register(WfEditSession *s)
-{
-	WfVim *v = &s->vim;
-	WfBuffer *b = wf_es_buffer(s);
-	bool ok = true;
-
-	if (b && v->reg >= 0 && v->regs[v->reg].text) {
-		WfStatus st = wf_ed_set_clip(&b->ed, v->regs[v->reg].text,
-		        v->regs[v->reg].n, v->regs[v->reg].lines);
-
-		if (WF_OK == st) {
-			wf_es_clip_out(s);
-		} else {
-			/* the clip still holds something else: it must not be
-			 * pasted, nor sent to the system as this register */
-			wf_es_fail_status(s, st);
-			ok = false;
-		}
-	}
+	return WF_ES_REDRAW;
+fail:
+	ed->undo.open_group = group;
+	ed->undo.next_group = next_group;
+	ed->undo.open_bytes = group_bytes;
+	free(text);
+	free(named);
+	free(clip);
 	v->reg = -1;
 	v->append = false;
-	return ok;
+	wf_es_fail_status(s, st);
+	return WF_ES_REDRAW;
 }
 
-/* Applies `op` to the characters from..to (to excluded). */
 static WfEsResult chars_op(WfEditSession *s, char op, WfPos from, WfPos to)
 {
-	WfBuffer *b = wf_es_buffer(s);
-	WfEditor *ed = &b->ed;
-	WfEsResult res;
-	uint64_t gen = ed->text.gen;
-
 	if (pos_before(to, from)) {
 		WfPos t = from;
-
 		from = to;
 		to = t;
 	}
 	if (!pos_before(from, to)) {
 		if ('c' == op) {
+			wf_un_group_begin(&wf_es_buffer(s)->ed.undo);
 			s->vim_insert = true;
 		}
 		return WF_ES_REDRAW;
 	}
-	ed->anchor = from;
-	ed->cur = to;
-	ed->has_anchor = true;
-	ed->mark = false;
-	ed->want_valid = false;
-	if ('y' == op) {
-		res = wf_es_run(s, WF_CMD_COPY, false);
-		wf_ed_clear_selection(ed);
-		ed->cur = from;
-		ed->want_valid = false;
-	} else {
-		res = wf_es_run(s, WF_CMD_CUT, false);
-		if (ed->text.gen ==
-		        gen) { /* read-only, or too big: nothing was cut */
-			s->vim.reg = -1;
-			return res;
-		}
-		if ('c' == op) {
-			s->vim_insert = true;
-		}
-	}
-	keep_register(s, ed);
-	return res;
+	return apply_range(s, op, from, to, NULL, 0, false);
 }
 
-/* Applies `op` to whole lines l1..l2. */
 static WfEsResult lines_op(WfEditSession *s, char op, size_t l1, size_t l2)
 {
-	WfBuffer *b = wf_es_buffer(s);
-	WfEditor *ed = &b->ed;
-	WfPos home = ed->cur;
-	WfEsResult res;
-	size_t n = 0, last = last_line(ed);
-	uint64_t gen = ed->text.gen;
-	char *text;
-
+	WfEditor *ed = &wf_es_buffer(s)->ed;
+	size_t last = last_line(ed), n = 0;
 	if (l2 > last) {
 		l2 = last;
 	}
 	if (l1 > l2) {
 		l1 = l2;
 	}
-	text = lines_text(ed, l1, l2, &n);
+	char *text = lines_text(ed, l1, l2, &n);
 	if (!text) {
+		wf_es_fail_status(s, WF_E_NOMEM);
 		return WF_ES_REDRAW;
 	}
-	if ('y' == op) {
-		ed->anchor = (WfPos){l1, 0};
-		ed->cur = (WfPos){l2, ed->text.lines[l2].len};
-		ed->has_anchor = true;
-		res = wf_es_run(s, WF_CMD_COPY, false);
-		wf_ed_clear_selection(ed);
-		ed->cur = home;
-		if (ed->cur.line > last_line(ed)) {
-			ed->cur.line = last_line(ed);
-		}
-		ed->want_valid = false;
-	} else {
-		if ('c' == op) { /* the text goes, the line stays */
-			ed->anchor = (WfPos){l1, 0};
-			ed->cur = (WfPos){l2, ed->text.lines[l2].len};
-		} else if (l2 < last) {
-			ed->anchor = (WfPos){l1, 0};
-			ed->cur = (WfPos){l2 + 1, 0};
-		} else if (l1 >
-		        0) { /* the last lines: take the break before them */
-			ed->anchor =
-			        (WfPos){l1 - 1, ed->text.lines[l1 - 1].len};
-			ed->cur = (WfPos){l2, ed->text.lines[l2].len};
-		} else {
-			ed->anchor = (WfPos){0, 0};
-			ed->cur = (WfPos){l2, ed->text.lines[l2].len};
-		}
-		ed->has_anchor = true;
-		ed->mark = false;
-		res = wf_es_run(s, WF_CMD_CUT, false);
-		if (ed->text.gen == gen) { /* nothing was cut */
-			wf_ed_clear_selection(ed);
-			ed->cur = home;
-			s->vim.reg = -1;
-			free(text);
-			return res;
-		}
-		if ('c' == op) {
-			s->vim_insert = true;
-		} else if (ed->cur.line <= last_line(ed)) {
-			ed->cur.col = 0;
-		}
-		ed->want_valid = false;
+	WfPos from = {l1, 0}, to = {l2, ed->text.lines[l2].len};
+	if ('c' != op && l2 + 1 < ed->text.n) {
+		to = (WfPos){l2 + 1, 0};
+	} else if ('d' == op && l1 > 0) {
+		from = (WfPos){l1 - 1, ed->text.lines[l1 - 1].len};
 	}
-	{
-		WfStatus st = wf_ed_set_clip(ed, text, n, true);
+	uint64_t gen = ed->text.gen;
+	WfEsResult result = apply_range(s, op, from, to, text, n, true);
+	if ('d' == op && gen != ed->text.gen) {
+		ed->cur.line = l1 < ed->text.n ? l1 : ed->text.n - 1;
+		ed->cur.col = 0;
+	}
+	return result;
+}
 
-		if (WF_OK == st) {
-			wf_es_clip_out(s);
-			keep_register(s, ed);
-		} else {
-			/* the text is out of the document and in no clip: said, and
-			 * the old clip is not sent on as if it were this */
-			wf_es_fail_status(s, st);
-			s->vim.reg = -1;
-		}
+WfEsResult wf_vim_paste(WfEditSession *s, bool after)
+{
+	WfVim *v = &s->vim;
+	WfEditor *ed = &wf_es_buffer(s)->ed;
+	const WfVimRegister *r = v->reg >= 0 ? &v->regs[v->reg] : &v->unnamed;
+	v->reg = -1;
+	v->append = false;
+	if (!r->text || !r->n) {
+		return WF_ES_REDRAW;
 	}
-	free(text);
-	return res;
+	WfPos at = ed->cur;
+	char *allocated = NULL;
+	const char *text = r->text;
+	size_t n = r->n;
+	size_t line = at.line;
+	if (r->lines) {
+		if (after && at.line + 1 < ed->text.n) {
+			at.line++;
+			at.col = 0;
+		} else if (after) {
+			if (n && text[n - 1] == '\n') {
+				n--;
+			}
+			if (n && text[n - 1] == '\r') {
+				n--;
+			}
+			allocated = wf_et_malloc(n + 1);
+			if (!allocated) {
+				wf_es_fail_status(s, WF_E_NOMEM);
+				return WF_ES_REDRAW;
+			}
+			allocated[0] = '\n';
+			memcpy(allocated + 1, text, n);
+			text = allocated;
+			n++;
+			at.col = ed->text.lines[at.line].len;
+		} else {
+			at.col = 0;
+		}
+		line += after ? 1 : 0;
+	} else if (after && at.col < ed->text.lines[at.line].len) {
+		at.col = wf_et_col_next(&ed->text.lines[at.line], at.col);
+	}
+	WfStatus st = wf_ed_replace_range(ed, at, at, text, n);
+	free(allocated);
+	if (WF_OK != st) {
+		wf_es_fail_status(s, st);
+		return WF_ES_REDRAW;
+	}
+	if (r->lines) {
+		ed->cur = (WfPos){line < ed->text.n ? line : ed->text.n - 1, 0};
+		const WfELine *l = &ed->text.lines[ed->cur.line];
+		while (ed->cur.col < l->len &&
+		        (l->s[ed->cur.col] == ' ' ||
+		                l->s[ed->cur.col] == '\t')) {
+			ed->cur.col++;
+		}
+	} else if (ed->cur.col) {
+		ed->cur.col = wf_et_col_prev(
+		        &ed->text.lines[ed->cur.line], ed->cur.col);
+	}
+	if (ed->undo.pos) {
+		ed->undo.rec[ed->undo.pos - 1].after = ed->cur;
+	}
+	return WF_ES_REDRAW;
 }
 
 static unsigned total_count(const WfVim *v)
@@ -332,6 +382,171 @@ static int char_class(unsigned char c)
 	               (c >= 'A' && c <= 'Z') || '_' == c || c >= 0x80)
 	        ? 1
 	        : 2;
+}
+
+static void word_begin(
+        WfEditSession *s, bool right, unsigned count, bool extend, char op)
+{
+	WfVim *v = &s->vim;
+	WfBuffer *b = wf_es_buffer(s);
+	memset(&v->motion, 0, sizeof v->motion);
+	v->motion.buffer = b;
+	v->motion.gen = b->ed.text.gen;
+	v->motion.from = v->motion.at = b->ed.cur;
+	v->motion.left = count;
+	v->motion.right = right;
+	v->motion.extend = extend;
+	v->motion.op = op;
+	v->motion.active = true;
+	if (!right && !v->motion.at.col && v->motion.at.line) {
+		v->motion.at.line--;
+		v->motion.at.col = b->ed.text.lines[v->motion.at.line].len;
+	}
+	wf_ed_word_scan_begin(&v->motion.scan, v->motion.at.col, right);
+}
+
+/* One bounded scan; neither cursor nor selection is provisional. */
+static bool vim_word_slice(WfEditSession *s)
+{
+	WfVim *v = &s->vim;
+	WfBuffer *b = wf_es_buffer(s);
+	if (!v->motion.active) {
+		return false;
+	}
+	if (!b || v->motion.buffer != b || v->motion.gen != b->ed.text.gen ||
+	        wf_pos_cmp(v->motion.from, b->ed.cur)) {
+		wf_vim_stop(s);
+		wf_es_fail_status(s, WF_E_CANCELLED);
+		return true;
+	}
+	WfEditor *ed = &b->ed;
+	size_t budget = 65536;
+	/* Counts cannot turn one event into an unbounded series of scans. */
+	for (unsigned step = 0; step < 16 && budget; step++) {
+		const WfELine *l = &ed->text.lines[v->motion.at.line];
+		if (v->motion.leading) {
+			size_t before = v->motion.at.col;
+			size_t end = l->len - v->motion.at.col > budget
+			        ? v->motion.at.col + budget
+			        : l->len;
+			while (v->motion.at.col < end &&
+			        char_class((
+			                unsigned char)l->s[v->motion.at.col]) ==
+			                0) {
+				v->motion.at.col++;
+			}
+			budget -= v->motion.at.col - before;
+			if (v->motion.at.col == end && end < l->len) {
+				return false;
+			}
+			v->motion.leading = false;
+		} else {
+			size_t before = v->motion.scan.col;
+			if (!wf_ed_word_scan_step(l, &v->motion.scan, budget)) {
+				return false;
+			}
+			v->motion.at.col = v->motion.scan.col;
+			size_t scanned = before > v->motion.at.col
+			        ? before - v->motion.at.col
+			        : v->motion.at.col - before;
+			budget = scanned >= budget ? 0 : budget - scanned;
+			if (v->motion.right && v->motion.at.col == l->len &&
+			        v->motion.at.line < last_line(ed)) {
+				v->motion.at.line++;
+				v->motion.at.col = 0;
+				v->motion.leading = true;
+				continue;
+			}
+		}
+		if (--v->motion.left == 0) {
+			WfPos to = v->motion.at, from = v->motion.from;
+			char op = v->motion.op;
+			v->motion.active = false;
+			if (op) {
+				if (v->motion.right) {
+					to = clamp_to_line(ed, from, to);
+				}
+				if (op == 'c') {
+					to = trim_blanks(ed, from, to);
+				}
+				(void)chars_op(s, op, from, to);
+			} else {
+				wf_ed_move_to(ed, to, v->motion.extend);
+				wf_vim_normal_cursor(s);
+			}
+			wf_vim_dot_after(s);
+			return true;
+		}
+		if (!v->motion.right && !v->motion.at.col &&
+		        v->motion.at.line) {
+			v->motion.at.line--;
+			v->motion.at.col =
+			        ed->text.lines[v->motion.at.line].len;
+		}
+		wf_ed_word_scan_begin(
+		        &v->motion.scan, v->motion.at.col, v->motion.right);
+	}
+	return false;
+}
+
+WfEsResult wf_vim_move(
+        WfEditSession *s, WfEdCmd cmd, unsigned count, bool extend)
+{
+	WfEditor *ed = &wf_es_buffer(s)->ed;
+	WfPos to = ed->cur;
+	unsigned n = count ? count : 1;
+	if (cmd == WF_CMD_WORD_LEFT || cmd == WF_CMD_WORD_RIGHT) {
+		word_begin(s, cmd == WF_CMD_WORD_RIGHT, n, extend, 0);
+		(void)vim_word_slice(s);
+		return WF_ES_REDRAW;
+	} else if (cmd == WF_CMD_HOME) {
+		to.col = 0;
+	} else if (cmd == WF_CMD_END) {
+		to.line += n - 1 > last_line(ed) - to.line
+		        ? last_line(ed) - to.line
+		        : n - 1;
+		const WfELine *l = &ed->text.lines[to.line];
+		to.col = l->len ? wf_et_col_prev(l, l->len) : 0;
+	} else if (cmd == WF_CMD_DOC_START || cmd == WF_CMD_DOC_END) {
+		to.line = count                 ? (size_t)count - 1
+		        : cmd == WF_CMD_DOC_END ? last_line(ed)
+		                                : 0;
+		if (to.line > last_line(ed)) {
+			to.line = last_line(ed);
+		}
+		to.col = 0;
+		const WfELine *l = &ed->text.lines[to.line];
+		while (to.col < l->len &&
+		        char_class((unsigned char)l->s[to.col]) == 0) {
+			to.col++;
+		}
+	} else if (cmd == WF_CMD_LEFT || cmd == WF_CMD_RIGHT) {
+		const WfELine *l = &ed->text.lines[to.line];
+		for (unsigned i = 0; i < n; i++) {
+			if (cmd == WF_CMD_LEFT && to.col) {
+				to.col = wf_et_col_prev(l, to.col);
+			} else if (cmd == WF_CMD_RIGHT && to.col < l->len) {
+				size_t next = wf_et_col_next(l, to.col);
+				if (next < l->len) {
+					to.col = next;
+				}
+			}
+		}
+	} else {
+		for (unsigned i = 0; i < n; i++) {
+			wf_ed_move(ed,
+			        cmd == WF_CMD_UP             ? WF_MV_UP
+			                : cmd == WF_CMD_DOWN ? WF_MV_DOWN
+			                : cmd == WF_CMD_PGUP ? WF_MV_PAGE_UP
+			                                     : WF_MV_PAGE_DOWN,
+			        extend, s->rows > 4 ? (size_t)s->rows - 4 : 1);
+		}
+		wf_vim_normal_cursor(s);
+		return WF_ES_REDRAW;
+	}
+	wf_ed_move_to(ed, to, extend);
+	wf_vim_normal_cursor(s);
+	return WF_ES_REDRAW;
 }
 
 /* The end of the word `n` words on, excluded: "de" takes the last letter. */
@@ -620,12 +835,32 @@ static WfEsResult run_object(WfEditSession *s, bool around, uint32_t ch)
 	char op = v->op;
 	WfPos from = {0, 0}, to = {0, 0};
 	bool ok = false;
+	unsigned count = total_count(v);
 
 	v->wait = 0;
 	v->op = 0;
 	v->count = v->count2 = 0;
 	switch (ch) {
-	case 'w':  ok = object_word(ed, around, &from, &to); break;
+	case 'w': {
+		WfEditor view = *ed;
+		ok = object_word(&view, around, &from, &to);
+		for (unsigned i = 1; ok && i < count; i++) {
+			view.cur = to;
+			if (view.cur.col ==
+			                view.text.lines[view.cur.line].len &&
+			        view.cur.line < last_line(ed)) {
+				view.cur.line++;
+				view.cur.col = 0;
+			}
+			WfPos a, b;
+			if (!object_word(&view, around, &a, &b) ||
+			        wf_pos_cmp(b, to) <= 0) {
+				break;
+			}
+			to = b;
+		}
+		break;
+	}
 	case '"':
 	case '\'':
 	case '`':  ok = object_quote(ed, (char)ch, around, &from, &to); break;
@@ -644,6 +879,17 @@ static WfEsResult run_object(WfEditSession *s, bool around, uint32_t ch)
 	if (!ok) {
 		v->reg = -1;
 		v->append = false;
+		return WF_ES_REDRAW;
+	}
+	if (!op && v->visual) {
+		ed->anchor = from;
+		ed->cur = to;
+		if (to.col) {
+			ed->cur.col = wf_et_col_prev(
+			        &ed->text.lines[to.line], to.col);
+		}
+		ed->has_anchor = true;
+		ed->mark = false;
 		return WF_ES_REDRAW;
 	}
 	return chars_op(s, op, from, to);
@@ -685,27 +931,35 @@ static WfEsResult run_motion(WfEditSession *s, char motion)
 	v->count = v->count2 = 0;
 	switch (motion) {
 	case 'w':
-		t = clamp_to_line(
-		        ed, ed->cur, motion_target(ed, WF_MV_WORD_RIGHT, n));
-		if ('c' == op) {
-			t = trim_blanks(ed, ed->cur, t);
-		}
-		return chars_op(s, op, ed->cur, t);
-	case 'e': return chars_op(s, op, ed->cur, word_end(ed, ed->cur, n));
 	case 'b':
-		return chars_op(
-		        s, op, motion_target(ed, WF_MV_WORD_LEFT, n), ed->cur);
+		word_begin(s, motion == 'w', n, false, op);
+		(void)vim_word_slice(s);
+		return WF_ES_REDRAW;
+	case 'e': return chars_op(s, op, ed->cur, word_end(ed, ed->cur, n));
 	case '$':
+		if (n > 1 && !ed->cur.col && op == 'd') {
+			return lines_op(s, op, cur, cur + n - 1);
+		}
 		return chars_op(s, op, ed->cur,
-		        (WfPos){ed->cur.line,
-		                ed->text.lines[ed->cur.line].len});
+		        (WfPos){cur + n - 1 < last ? cur + n - 1 : last,
+		                ed->text.lines[cur + n - 1 < last ? cur + n - 1
+		                                                  : last]
+		                        .len});
 	case '0': return chars_op(s, op, (WfPos){ed->cur.line, 0}, ed->cur);
 	case 'h':
-		return chars_op(
-		        s, op, motion_target(ed, WF_MV_LEFT, n), ed->cur);
-	case 'l':
-		return chars_op(
-		        s, op, ed->cur, motion_target(ed, WF_MV_RIGHT, n));
+	case 'l': {
+		const WfELine *l = &ed->text.lines[cur];
+		t = ed->cur;
+		for (unsigned i = 0; i < n; i++) {
+			if (motion == 'h' && t.col) {
+				t.col = wf_et_col_prev(l, t.col);
+			}
+			if (motion == 'l' && t.col < l->len) {
+				t.col = wf_et_col_next(l, t.col);
+			}
+		}
+		return chars_op(s, op, ed->cur, t);
+	}
 	case 'j': return lines_op(s, op, cur, cur + n > last ? last : cur + n);
 	case 'k': return lines_op(s, op, cur > n ? cur - n : 0, cur);
 	case 'G': {
@@ -780,6 +1034,22 @@ WfEsResult wf_vim_exec(WfEditSession *s, WfEdCmd cmd, unsigned count)
 	}
 	ed = &b->ed;
 	switch (cmd) {
+	case WF_CMD_VIM_YANK_LINE:
+	case WF_CMD_VIM_CUT_LINE:
+		return lines_op(s, cmd == WF_CMD_VIM_YANK_LINE ? 'y' : 'd',
+		        ed->cur.line, ed->cur.line + (count ? count : 1) - 1);
+	case WF_CMD_VIM_DELETE_CHAR: {
+		if (v->visual) {
+			return visual_op(s, 'd');
+		}
+		const WfELine *l = &ed->text.lines[ed->cur.line];
+		WfPos to = ed->cur;
+		for (unsigned i = 0; i < (count ? count : 1) && to.col < l->len;
+		        i++) {
+			to.col = wf_et_col_next(l, to.col);
+		}
+		return chars_op(s, 'd', ed->cur, to);
+	}
 	case WF_CMD_VIM_OP_DELETE:
 	case WF_CMD_VIM_OP_YANK:
 	case WF_CMD_VIM_OP_CHANGE: {
@@ -800,9 +1070,10 @@ WfEsResult wf_vim_exec(WfEditSession *s, WfEdCmd cmd, unsigned count)
 	case WF_CMD_VIM_CHANGE_EOL: {
 		char op = WF_CMD_VIM_DELETE_EOL == cmd ? 'd' : 'c';
 
-		return chars_op(s, op, ed->cur,
-		        (WfPos){ed->cur.line,
-		                ed->text.lines[ed->cur.line].len});
+		v->op = op;
+		v->count = count;
+		v->count2 = 0;
+		return run_motion(s, '$');
 	}
 	case WF_CMD_VIM_VISUAL:
 	case WF_CMD_VIM_VISUAL_LINE: {
@@ -845,29 +1116,92 @@ WfEsResult wf_vim_exec(WfEditSession *s, WfEdCmd cmd, unsigned count)
 	return WF_ES_NONE;
 }
 
-static void play(WfEditSession *s, int reg, unsigned times)
+static bool replay_begin(WfEditSession *s,
+        const WfEvent *events,
+        size_t n,
+        unsigned times,
+        bool dot)
 {
 	WfVim *v = &s->vim;
-	size_t n = v->macro[reg].n;
-	WfEvent *copy;
-
-	if (v->playing || !n) {
-		return;
+	if (!n || v->playback.ev) {
+		return false;
 	}
-	copy = malloc(n * sizeof *copy);
+	WfEvent *copy = wf_et_malloc(n * sizeof *copy);
 	if (!copy) {
+		wf_es_fail_status(s, WF_E_NOMEM);
+		return false;
+	}
+	memcpy(copy, events, n * sizeof *copy);
+	v->playback.ev = copy;
+	v->playback.n = n;
+	v->playback.at = 0;
+	v->playback.left = times ? times : 1;
+	v->playback.buffer = wf_es_buffer(s);
+	v->playback.gen = wf_es_buffer(s)->ed.text.gen;
+	v->playing = !dot;
+	v->replaying = dot;
+	return true;
+}
+
+static void play(WfEditSession *s, int reg, unsigned times)
+{
+	if (s->vim.playing || s->vim.replaying) {
 		return;
 	}
-	memcpy(copy, v->macro[reg].ev, n * sizeof *copy);
-	v->playing = true;
-	for (unsigned t = 0; t < (times ? times : 1); t++) {
-		for (size_t i = 0; i < n; i++) {
-			(void)wf_es_event(s, &copy[i], s->rows, s->cols);
+	(void)replay_begin(
+	        s, s->vim.macro[reg].ev, s->vim.macro[reg].n, times, false);
+}
+
+void wf_vim_stop(WfEditSession *s)
+{
+	WfVim *v = &s->vim;
+	v->motion.active = false;
+	free(v->playback.ev);
+	memset(&v->playback, 0, sizeof v->playback);
+	v->playing = v->replaying = false;
+	v->cand_ok = false;
+	wf_vim_cancel(v);
+}
+
+bool wf_vim_tick(WfEditSession *s)
+{
+	WfVim *v = &s->vim;
+	if (v->playback.ev &&
+	        (v->playback.buffer != wf_es_buffer(s) || !wf_es_buffer(s) ||
+	                v->playback.gen != wf_es_buffer(s)->ed.text.gen)) {
+		wf_vim_stop(s);
+		wf_es_fail_status(s, WF_E_CHANGED);
+		return true;
+	}
+	bool redraw = vim_word_slice(s);
+	if (v->playback.ev) {
+		v->playback.gen = wf_es_buffer(s)->ed.text.gen;
+	}
+	for (unsigned i = 0; v->playback.ev && !v->motion.active &&
+	        !s->motion.active && i < 16;
+	        i++) {
+		WfEvent ev = v->playback.ev[v->playback.at++];
+		s->input_draining = true;
+		(void)wf_es_event(s, &ev, s->rows, s->cols);
+		s->input_draining = false;
+		redraw = true;
+		if (!wf_es_buffer(s)) {
+			wf_vim_stop(s);
+			break;
+		}
+		v->playback.buffer = wf_es_buffer(s);
+		v->playback.gen = wf_es_buffer(s)->ed.text.gen;
+		if (v->playback.at == v->playback.n) {
+			v->playback.at = 0;
+			if (--v->playback.left == 0) {
+				free(v->playback.ev);
+				memset(&v->playback, 0, sizeof v->playback);
+				v->playing = v->replaying = false;
+				v->dot_skip = true;
+			}
 		}
 	}
-	v->playing = false;
-	v->dot_skip = true; /* the keys inside already made their own "." */
-	free(copy);
+	return redraw;
 }
 
 bool wf_vim_follow(WfEditSession *s, const WfEvent *ev, WfEsResult *res)
@@ -875,6 +1209,13 @@ bool wf_vim_follow(WfEditSession *s, const WfEvent *ev, WfEsResult *res)
 	WfVim *v = &s->vim;
 	uint32_t ch;
 
+	if (!v->wait && v->visual && WF_EV_CHAR == ev->type &&
+	        (ev->ch == 'i' || ev->ch == 'a') && !(ev->vk & WF_VK_PASTED)) {
+		v->wait = ev->ch == 'i' ? 'I' : 'A';
+		v->op = 0;
+		*res = WF_ES_REDRAW;
+		return true;
+	}
 	if (!v->wait) {
 		return false;
 	}
@@ -902,13 +1243,16 @@ bool wf_vim_follow(WfEditSession *s, const WfEvent *ev, WfEsResult *res)
 		if (ch >= 'a' && ch <= 'z') {
 			int r = (int)(ch - 'a');
 
-			free(v->macro[r].ev);
-			v->macro[r].ev =
-			        malloc(WF_VIM_MACRO_MAX * sizeof(WfEvent));
-			v->macro[r].n = 0;
-			if (v->macro[r].ev) {
+			WfEvent *events =
+			        wf_et_malloc(WF_VIM_MACRO_MAX * sizeof *events);
+			if (events) {
+				free(v->macro[r].ev);
+				v->macro[r].ev = events;
+				v->macro[r].n = 0;
 				v->recording = r;
 				v->macro_over = false;
+			} else {
+				wf_es_fail_status(s, WF_E_NOMEM);
 			}
 		}
 		return true;
@@ -932,11 +1276,13 @@ bool wf_vim_follow(WfEditSession *s, const WfEvent *ev, WfEsResult *res)
 		return true;
 	case 'o':
 		if (ch >= '1' && ch <= '9') {
-			v->count2 = v->count2 * 10 + (ch - '0');
+			unsigned next = v->count2 * 10 + (ch - '0');
+			v->count2 = next > 9999 ? 9999 : next;
 			return true;
 		}
 		if ('0' == ch && v->count2) {
-			v->count2 *= 10;
+			unsigned next = v->count2 * 10;
+			v->count2 = next > 9999 ? 9999 : next;
 			return true;
 		}
 		if ('g' == ch) {
@@ -984,7 +1330,7 @@ void wf_vim_record(WfEditSession *s, const WfEvent *ev)
 static bool idle(const WfEditSession *s)
 {
 	return wf_keymap_modal(s->cfg.keys) && !s->vim_insert && !s->vim.wait &&
-	        !s->vim.visual && PR_NONE == s->pk &&
+	        !s->vim.visual && !s->vim.motion.active && PR_NONE == s->pk &&
 	        !wf_keystate_active(&s->ks);
 }
 
@@ -1056,25 +1402,8 @@ void wf_vim_dot_after(WfEditSession *s)
 
 static void repeat_last(WfEditSession *s, unsigned times)
 {
-	WfVim *v = &s->vim;
-	WfEvent *copy;
-	size_t n = v->dot_n;
-
-	if (v->replaying || !n) {
+	if (s->vim.playing || s->vim.replaying) {
 		return;
 	}
-	copy = malloc(n * sizeof *copy);
-	if (!copy) {
-		return;
-	}
-	memcpy(copy, v->dot, n * sizeof *copy);
-	v->replaying = true;
-	for (unsigned t = 0; t < (times ? times : 1); t++) {
-		for (size_t i = 0; i < n; i++) {
-			(void)wf_es_event(s, &copy[i], s->rows, s->cols);
-		}
-	}
-	v->replaying = false;
-	v->dot_skip = true; /* "." is not itself the change to repeat */
-	free(copy);
+	(void)replay_begin(s, s->vim.dot, s->vim.dot_n, times, true);
 }

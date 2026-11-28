@@ -10,7 +10,9 @@ static int editor_event(void *ctx, const WfEvent *ev, int rows, int cols)
 {
 	wf_es_set_clock(ctx, GetTickCount64()); /* for the timeout of "gg" */
 	switch (wf_es_event(ctx, ev, rows, cols)) {
-	case WF_ES_NONE:   return 0;
+	case WF_ES_NONE: return 0;
+	case WF_ES_BUSY:
+		return 0; /* pump retains input before the port is called */
 	case WF_ES_REDRAW: return wf_es_take_lock_look(ctx) ? 3 : 1;
 	case WF_ES_CLOSED: break;
 	}
@@ -26,6 +28,7 @@ static int editor_save_again(void *ctx)
 {
 	switch (wf_es_save_again(ctx)) {
 	case WF_ES_NONE:   return 0;
+	case WF_ES_BUSY:   return 0;
 	case WF_ES_REDRAW: return 1;
 	case WF_ES_CLOSED: break;
 	}

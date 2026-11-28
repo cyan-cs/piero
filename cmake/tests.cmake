@@ -552,6 +552,11 @@ target_link_libraries(test_esession PRIVATE wfefile)
 target_include_directories(test_esession PRIVATE tests)
 add_test(NAME esession COMMAND test_esession)
 
+add_executable(test_editor_compat tests/test_editor_compat.c)
+target_link_libraries(test_editor_compat PRIVATE wfefile)
+target_include_directories(test_editor_compat PRIVATE tests)
+add_test(NAME editor_compat COMMAND test_editor_compat)
+
 # Big-text behaviour of the editing model; prints its figures.
 add_executable(test_editor_perf tests/test_editor_perf.c)
 target_link_libraries(test_editor_perf PRIVATE wfcore)

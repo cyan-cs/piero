@@ -233,6 +233,8 @@ static const Def ED_VIM_NORMAL[] = {{WF_CTX_VIM_NORMAL, WF_CMD_LEFT, "h, Left"},
         {WF_CTX_VIM_NORMAL, WF_CMD_CANCEL, "Esc"}, {0, 0, NULL}};
 
 static const Def ED_VIM_INSERT[] = {
+        {WF_CTX_VIM_INSERT, WF_CMD_SYSTEM_COPY, "Ctrl+Insert"},
+        {WF_CTX_VIM_INSERT, WF_CMD_SYSTEM_PASTE, "Shift+Insert"},
         {WF_CTX_VIM_INSERT, WF_CMD_VIM_NORMAL, "Esc"},
         {WF_CTX_VIM_INSERT, WF_CMD_LEFT, "Left"},
         {WF_CTX_VIM_INSERT, WF_CMD_RIGHT, "Right"},

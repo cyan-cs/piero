@@ -57,9 +57,11 @@ $mutants=@(
  @{name='clip_refusal_remembered';file='src/edit/wf_esession.c';test='tests/test_esession.c';old='s->clip_local_only = true;';new='s->clip_local_only = false;'},
  @{name='edit_rollback_without_memory';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='if (rb->copied) {
 		wf_et_snap_restore(&e->text, &rb->snap, cur_last);
+		e->text.gen = rb->gen;
 		return;
 	}';new='if (rb->copied && 0) {
 		wf_et_snap_restore(&e->text, &rb->snap, cur_last);
+		e->text.gen = rb->gen;
 		return;
 	}'},
  @{name='copy_dest_id_checked';file='src/xfer/wf_copyengine_win.c';test='tests/test_copyengine_win.c';old='!wf_info_matches(want, &st.id)) {';new='0) {'},
@@ -481,8 +483,8 @@ bool wf_state_report_any'},
  @{name='tabs_new_tab_goes_to_the_end';file='src/ui/wf_app_tabs.c';test='tests/test_tabs.c';old='at = app->tabs.cur + 1;';new='at = app->tabs.n;'},
  @{name='tabs_close_hides_a_failed_walk';file='src/ui/wf_app_tabs.c';test='tests/test_tabs.c';old='if (WF_OK != st) { app->tabs.going = false; app->tabs.closing = false;';new='if (0) { app->tabs.going = false; app->tabs.closing = false;'},
  @{name='replace_all_cursor_inside_a_character';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='while (keep.col > 0 && keep.col < l->len &&';new='while ((void)l, 0 && keep.col > 0 && keep.col < l->len &&'},
- @{name='undo_group_repeats_done_records';file='src/edit/wf_eundo.c';test='tests/test_editor.c';old='*last = u->pos - 1;';new='*last = *last;'},
- @{name='redo_group_repeats_done_records';file='src/edit/wf_eundo.c';test='tests/test_editor.c';old='*first = u->pos; /* likewise for a group redone in part */';new='*first = *first;'},
+ @{name='group_failure_keeps_partial_text';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='if (snap.lines) {';new='if (snap.lines && 0) {'},
+ @{name='group_failure_keeps_partial_history_position';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='e->undo.pos = pos;';new='(void)pos; e->undo.pos = forward ? i + 1 : i;'},
  @{name='undo_apply_without_a_copy';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='st = rollback_begin(&rb, e, r->at, end, put, put_n);';new='memset(&rb, 0, sizeof rb); st = WF_OK; (void)put_n;'},
  @{name='vertical_move_changes_line_first';file='src/edit/wf_editor.c';test='tests/test_editor.c';old='to.line--;';new='e->cur.line--;'},
  @{name='session_save_only_run_overwrites_newer';file='src/session/wf_session_store.c';test='tests/test_session.c';old='(void)wf_session_store_read(s, &saved, NULL);';new='memset(&saved, 0, sizeof saved);'},

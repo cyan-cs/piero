@@ -73,6 +73,9 @@ static const Bind PIERO[] = {KEY(WF_KEY_ESC, WF_CMD_EXIT, NULL),
         {WF_EV_CHAR, 0, WF_KEY_NONE, WF_CMD_NONE, false, NULL}};
 
 static const Bind NANO[] = {KEY(WF_KEY_ESC, WF_CMD_CANCEL, NULL),
+        KEY(WF_KEY_CTRL_DELETE, WF_CMD_DELETE_WORD_RIGHT, NULL),
+        KEY(WF_KEY_CTRL_INSERT, WF_CMD_SYSTEM_COPY, NULL),
+        KEY(WF_KEY_SHIFT_INSERT, WF_CMD_SYSTEM_PASTE, NULL),
         CTRL('o', WF_CMD_SAVE_AS, "^O"), CTRL('f', WF_CMD_FIND, "^F"),
         CTRL('b', WF_CMD_FIND_BACK, "^B"), ALT('r', WF_CMD_REPLACE, "M-R"),
         CTRL('k', WF_CMD_CUT, "^K"), CTRL('u', WF_CMD_PASTE, "^U"),

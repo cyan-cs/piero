@@ -131,7 +131,8 @@ typedef enum
 {
 	WF_ES_NONE,   /* nothing to redraw */
 	WF_ES_REDRAW, /* redraw */
-	WF_ES_CLOSED  /* the last buffer was closed: leave the editor */
+	WF_ES_CLOSED, /* the last buffer was closed: leave the editor */
+	WF_ES_BUSY /* input queue full: event NOT consumed; caller must retain it */
 } WfEsResult;
 
 typedef enum
@@ -158,9 +159,13 @@ void wf_es_save_drafts(WfEditSession *s, uint64_t now_ms);
 /* One deadline wake, then infinite wait again; no periodic polling. */
 uint32_t wf_es_timeout(const WfEditSession *s, uint64_t now_ms);
 bool wf_es_tick(WfEditSession *s, uint64_t now_ms);
-/* While a sliced motion is pending, retain subsequent input in the caller's
- * bounded batch and continue pumping results/timers. Resume input afterward. */
+/* Sliced scans, playback or retained input need zero-deadline ticks.
+ * Up to 64 later events are retained by the session. Check input_ready before
+ * passing an event; WF_ES_BUSY leaves ownership with the caller. */
 bool wf_es_motion_pending(const WfEditSession *s);
+bool wf_es_input_ready(const WfEditSession *s);
+/* After the last buffer closes, return remaining type-ahead to the host. */
+size_t wf_es_take_closed_input(WfEditSession *s, WfEvent *events, size_t cap);
 void wf_es_draw(WfEditSession *s, WfFrame *f);
 
 size_t wf_es_buffer_count(const WfEditSession *s);

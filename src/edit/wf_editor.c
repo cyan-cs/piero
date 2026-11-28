@@ -177,6 +177,7 @@ typedef struct
 {
 	bool copied;
 	WfETSnap snap;
+	uint64_t gen;
 } Rollback;
 
 static WfStatus rollback_begin(Rollback *rb,
@@ -187,6 +188,7 @@ static WfStatus rollback_begin(Rollback *rb,
         size_t n)
 {
 	memset(rb, 0, sizeof *rb);
+	rb->gen = e->text.gen;
 	if (from.line == to.line && !has_break(text, n)) {
 		return WF_OK;
 	}
@@ -205,12 +207,14 @@ static void rollback_apply(Rollback *rb,
 {
 	if (rb->copied) {
 		wf_et_snap_restore(&e->text, &rb->snap, cur_last);
+		e->text.gen = rb->gen;
 		return;
 	}
 	(void)wf_et_delete(&e->text, from, inserted_end, NULL, NULL);
 	if (del_n) {
 		(void)wf_et_insert(&e->text, from, del, del_n, false, NULL);
 	}
+	e->text.gen = rb->gen;
 }
 
 static void rollback_end(Rollback *rb)
@@ -1334,18 +1338,45 @@ WfStatus wf_ed_copy(WfEditor *e)
 WfStatus wf_ed_cut(WfEditor *e)
 {
 	WfStatus st;
+	char *old = e->clip;
+	size_t old_n = e->clip_n;
+	bool old_line = e->clip_line;
 
 	if (e->read_only) {
 		return WF_E_ACCESS;
 	}
+	e->clip = NULL;
+	e->clip_n = 0;
 	st = wf_ed_copy(e);
 	if (WF_OK != st) {
-		return st;
+		goto restore;
 	}
 	if (wf_ed_has_selection(e)) {
-		return replace_selection(e, NULL, 0, false, WF_UK_OTHER);
+		st = replace_selection(e, NULL, 0, false, WF_UK_OTHER);
+	} else {
+		st = wf_ed_delete_line(e);
 	}
-	return wf_ed_delete_line(e);
+	if (WF_OK == st) {
+		free(old);
+		return st;
+	}
+restore:
+	free(e->clip);
+	e->clip = old;
+	e->clip_n = old_n;
+	e->clip_line = old_line;
+	return st;
+}
+
+WfStatus wf_ed_replace_range(
+        WfEditor *e, WfPos from, WfPos to, const char *utf8, size_t n)
+{
+	WfStatus st = replace(e, from, to, utf8, n, true, WF_UK_OTHER);
+	if (WF_OK == st) {
+		wf_ed_clear_selection(e);
+		e->want_valid = false;
+	}
+	return st;
 }
 
 WfStatus wf_ed_paste(WfEditor *e)
@@ -1425,64 +1456,69 @@ static WfStatus apply_record(WfEditor *e, const WfURec *r, bool forward)
 	return WF_OK;
 }
 
-WfStatus wf_ed_undo(WfEditor *e)
+static WfStatus history_step(WfEditor *e, bool forward)
 {
 	size_t first, last, i;
 	WfStatus st = WF_OK;
+	WfETSnap snap = {0};
+	size_t pos = e->undo.pos, dirty = e->dirty_from;
+	WfPos cursor = e->cur;
+	uint64_t gen = e->text.gen;
 
 	if (e->read_only) {
 		return WF_E_ACCESS;
 	}
-	if (!wf_un_undo_span(&e->undo, &first, &last)) {
-		say(e, wf_msg(MSG_ED_NOTHING_TO_UNDO));
+	if (!(forward ? wf_un_redo_span(&e->undo, &first, &last)
+	              : wf_un_undo_span(&e->undo, &first, &last))) {
+		say(e,
+		        wf_msg(forward ? MSG_ED_NOTHING_TO_REDO
+		                       : MSG_ED_NOTHING_TO_UNDO));
 		return WF_OK;
 	}
-	for (i = last + 1; i-- > first;) {
-		st = apply_record(e, &e->undo.rec[i], false);
+	/* A group is one action: a later allocation failure must also roll back
+	 * the records already applied. Single records retain the cheap path. */
+	if (first != last) {
+		st = wf_et_snap_take(&e->text, 0, e->text.n - 1, &snap);
 		if (WF_OK != st) {
-			break;
+			return st;
 		}
-		e->undo.pos = i;
-		e->cur = e->undo.rec[i].before;
 	}
+	for (size_t step = 0; step <= last - first; step++) {
+		i = forward ? first + step : last - step;
+		st = apply_record(e, &e->undo.rec[i], forward);
+		if (WF_OK != st) {
+			if (snap.lines) {
+				wf_et_snap_restore(
+				        &e->text, &snap, e->text.n - 1);
+			}
+			e->text.gen = gen;
+			e->undo.pos = pos;
+			e->cur = cursor;
+			e->dirty_from = dirty;
+			return st;
+		}
+		e->undo.pos = forward ? i + 1 : i;
+		e->cur = forward ? e->undo.rec[i].after : e->undo.rec[i].before;
+	}
+	wf_et_snap_free(&snap);
 	wf_ed_clear_selection(e);
 	if (wf_et_valid(&e->text, e->cur)) {
 		e->want_valid = false;
 	}
 	if (WF_OK == st) {
-		say(e, wf_msg(MSG_ED_UNDONE));
+		say(e, wf_msg(forward ? MSG_ED_REDONE : MSG_ED_UNDONE));
 	}
 	return st;
 }
 
+WfStatus wf_ed_undo(WfEditor *e)
+{
+	return history_step(e, false);
+}
+
 WfStatus wf_ed_redo(WfEditor *e)
 {
-	size_t first, last, i;
-	WfStatus st = WF_OK;
-
-	if (e->read_only) {
-		return WF_E_ACCESS;
-	}
-	if (!wf_un_redo_span(&e->undo, &first, &last)) {
-		say(e, wf_msg(MSG_ED_NOTHING_TO_REDO));
-		return WF_OK;
-	}
-	for (i = first; i <= last; i++) {
-		st = apply_record(e, &e->undo.rec[i], true);
-		if (WF_OK != st) {
-			break;
-		}
-		e->undo.pos = i + 1;
-		e->cur = e->undo.rec[i].after;
-	}
-	wf_ed_clear_selection(e);
-	if (wf_et_valid(&e->text, e->cur)) {
-		e->want_valid = false;
-	}
-	if (WF_OK == st) {
-		say(e, wf_msg(MSG_ED_REDONE));
-	}
-	return st;
+	return history_step(e, true);
 }
 
 bool wf_ed_find(WfEditor *e, const WfSearch *s, bool forward, bool *wrapped)

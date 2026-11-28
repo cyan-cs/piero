@@ -22,18 +22,20 @@
 
 typedef struct
 {
+	char *text;
+	size_t n;
+	bool lines; /* true: linewise, false: characterwise; never inferred from LF */
+} WfVimRegister;
+
+typedef struct
+{
 	char wait; /* 0, or what the next key is: 'o' (a motion), '"', 'q', '@', 'g' */
 	char op;         /* 'd', 'y' or 'c' while a motion is awaited */
 	unsigned count;  /* the count typed before the operator (0: none) */
 	unsigned count2; /* the count typed after it */
 	bool visual, vline;
 	int reg; /* the register chosen with ", or -1 */
-	struct
-	{
-		char *text;
-		size_t n;
-		bool lines;
-	} regs[WF_VIM_REGS];
+	WfVimRegister regs[WF_VIM_REGS], unnamed;
 	int recording; /* the register being recorded into, or -1 */
 	struct
 	{
@@ -53,6 +55,24 @@ typedef struct
 	bool cand_ok;
 	bool replaying;
 	bool dot_skip; /* this command is not a change to repeat (undo, "." itself) */
+	struct
+	{
+		WfWordScan scan;
+		WfPos from, at;
+		const void *buffer;
+		uint64_t gen;
+		unsigned left;
+		char op;
+		bool active, right, extend, leading;
+	} motion;
+	struct
+	{
+		WfEvent *ev;
+		size_t n, at;
+		unsigned left;
+		const void *buffer;
+		uint64_t gen;
+	} playback;
 } WfVim;
 
 struct WfEditSession;
@@ -60,7 +80,12 @@ struct WfEditSession;
 void wf_vim_init(WfVim *v);
 void wf_vim_free(WfVim *v);
 /* A paste takes the register chosen with " instead of the clip, once. */
-bool wf_vim_paste_register(struct WfEditSession *s);
+WfEsResult wf_vim_paste(struct WfEditSession *s, bool after);
+WfEsResult wf_vim_move(
+        struct WfEditSession *s, WfEdCmd cmd, unsigned count, bool extend);
+void wf_vim_normal_cursor(struct WfEditSession *s);
+bool wf_vim_tick(struct WfEditSession *s);
+void wf_vim_stop(struct WfEditSession *s);
 
 /* A command of this file: true when `cmd` is one of the new Vim commands. */
 bool wf_vim_is_cmd(WfEdCmd cmd);

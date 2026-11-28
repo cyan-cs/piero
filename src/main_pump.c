@@ -548,7 +548,7 @@ static DispatchResult dispatch(
 		WfAction act;
 
 		if (&WF_MODE_EDITOR == lp->app.mode &&
-		        wf_es_motion_pending(lp->editor)) {
+		        !wf_es_input_ready(lp->editor)) {
 			break;
 		}
 		if (WF_EV_RESIZE == ev[i].type) {
@@ -736,7 +736,7 @@ static void fill_wait_handles(Loop *lp, HANDLE waits[W_COUNT])
 int wf_main_run_loop(Loop *lp)
 {
 	HANDLE waits[W_COUNT];
-	WfEvent deferred[EVENTS_PER_TICK];
+	WfEvent deferred[EVENTS_PER_TICK + 64];
 	size_t deferred_n = 0;
 
 	fill_wait_handles(lp, waits);
@@ -749,7 +749,7 @@ int wf_main_run_loop(Loop *lp)
 	for (;;) {
 		DWORD count = W_WATCH, w;
 		uint32_t timeout;
-		WfEvent ev[EVENTS_PER_TICK];
+		WfEvent ev[EVENTS_PER_TICK + 64];
 		bool dirty = lp->graphics_retry;
 		if (lp->app.mode == &WF_MODE_NORMAL &&
 		        !lp->app.update_prompted &&
@@ -832,14 +832,24 @@ int wf_main_run_loop(Loop *lp)
 			wf_app_dircache_enable(&lp->app, false);
 		}
 
-		/* Keep the rest of this bounded batch ordered behind a sliced
-		 * motion. Leave further input in the console until it completes;
-		 * results, timers and shutdown keep being serviced meanwhile. */
-		if (deferred_n) {
+		/* The editor owns bounded type-ahead. If it fills, retain this
+		 * batch and leave further console input unread while timers and
+		 * results continue. Esc in an accepted batch cancels the scan. */
+		n = wf_es_take_closed_input(
+		        lp->editor, ev, sizeof ev / sizeof *ev - deferred_n);
+		if (n) {
+			/* These events already belonged to the editor queue; closing
+			 * it must not discard them through the modal flush policy. */
+			lp->app.flush_input = false;
+			memcpy(ev + n, deferred, deferred_n * sizeof *ev);
+			n += deferred_n;
+			deferred_n = 0;
+		} else if (deferred_n) {
 			n = deferred_n;
 			memcpy(ev, deferred, n * sizeof *ev);
+			deferred_n = 0;
 		} else if (&WF_MODE_EDITOR == lp->app.mode &&
-		        wf_es_motion_pending(lp->editor)) {
+		        !wf_es_input_ready(lp->editor)) {
 			n = 0;
 		} else {
 			n = wf_term_read_events(lp->term, ev, EVENTS_PER_TICK);
@@ -869,6 +879,12 @@ int wf_main_run_loop(Loop *lp)
 		}
 		if (&WF_MODE_EDITOR == lp->app.mode &&
 		        wf_es_tick(lp->editor, lp->app.now_ms)) {
+			dirty = true;
+		}
+		if (&WF_MODE_EDITOR == lp->app.mode &&
+		        !wf_es_buffer_count(lp->editor)) {
+			WfEvent closed = {WF_EV_RELEASE, 0, WF_KEY_NONE, 0};
+			(void)lp->app.mode->on_event(&lp->app, &closed);
 			dirty = true;
 		}
 		if (lp->editor) {

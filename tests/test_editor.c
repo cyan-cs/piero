@@ -1693,11 +1693,10 @@ static void undo_and_redo_are_whole_when_memory_runs_out(void)
 	CHECK(undone && redone);
 }
 
-/* A grouped Undo that stopped half way goes on from there: the records already
- * undone are not undone again when it is tried once more. */
+/* A group is atomic even if a later record cannot allocate its replacement. */
 static void a_group_undone_in_part_is_finished_not_repeated(void)
 {
-	bool partial = false, partial_redo = false;
+	bool failed = false, failed_redo = false;
 
 	for (long fail_at = 0; fail_at < 20; fail_at++) {
 		WfStatus st;
@@ -1717,12 +1716,9 @@ static void a_group_undone_in_part_is_finished_not_repeated(void)
 		wf_et_fail_nth_alloc(fail_at);
 		st = wf_ed_undo(&ed);
 		wf_et_fail_nth_alloc(-1);
-		if (WF_OK != st && ed.undo.pos == 1) {
-			partial =
-			        true; /* the second record is undone, the first is not */
-			CHECK(is("xxa\nbb"));
-		}
 		if (WF_OK != st) {
+			failed = true;
+			CHECK(2 == ed.undo.pos && is("xxa\nyyb"));
 			CHECK(WF_OK == wf_ed_undo(&ed));
 		}
 		CHECK(is("aa\nbb"));
@@ -1731,16 +1727,42 @@ static void a_group_undone_in_part_is_finished_not_repeated(void)
 		st = wf_ed_redo(&ed);
 		wf_et_fail_nth_alloc(-1);
 		if (WF_OK != st) {
-			if (1 == ed.undo.pos) {
-				partial_redo =
-				        true; /* the first is back, the second is not */
-			}
+			failed_redo = true;
+			CHECK(0 == ed.undo.pos && is("aa\nbb"));
 			CHECK(WF_OK == wf_ed_redo(&ed));
 		}
 		CHECK(is("xxa\nyyb"));
 		CHECK(2 == ed.undo.pos);
 	}
-	CHECK(partial && partial_redo);
+	CHECK(failed && failed_redo);
+}
+
+static void failed_cut_preserves_the_previous_clip_and_selection(void)
+{
+	bool failed = false, succeeded = false;
+	for (long nth = 0; nth < 35; nth++) {
+		fresh("one\ntwo\nthree");
+		CHECK(WF_OK == wf_ed_set_clip(&ed, "old", 3, true));
+		ed.cur = (WfPos){1, 2};
+		ed.anchor = (WfPos){0, 1};
+		ed.has_anchor = ed.mark = true;
+		wf_et_fail_nth_alloc(nth);
+		WfStatus st = wf_ed_cut(&ed);
+		wf_et_fail_nth_alloc(-1);
+		if (WF_OK != st) {
+			failed = true;
+			CHECK(is("one\ntwo\nthree"));
+			CHECK(ed.cur.line == 1 && ed.cur.col == 2 &&
+			        ed.anchor.col == 1);
+			CHECK(ed.has_anchor && ed.mark && !ed.undo.pos &&
+			        !ed.undo.n);
+			CHECK(ed.clip_line && ed.clip_n == 3 &&
+			        !memcmp(ed.clip, "old", 3));
+		} else {
+			succeeded = true;
+		}
+	}
+	CHECK(failed && succeeded);
 }
 
 /* A vertical move that cannot measure the new line stays where it is: the
@@ -1856,6 +1878,7 @@ int main(void)
 	deletion_keeps_unicode_units_whole();
 	CHECK(WF_OK == wf_ed_init(&ed, NULL));
 	typing_and_deleting();
+	failed_cut_preserves_the_previous_clip_and_selection();
 	line_endings_survive_editing();
 	auto_indent_follows_the_line();
 	selections_replace_and_move();
