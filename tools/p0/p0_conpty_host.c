@@ -1597,10 +1597,11 @@ static bool product_edit(Product *pr)
 	PRODUCT_STEP_RETRY("a", "d  New folder", "edit_jp_create_menu");
 	PRODUCT_STEP(
 	        "%", "New file name: Enter creates", "edit_jp_create_form");
-	PRODUCT_STEP("\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E"
-	             "\xF0\xA0\xAE\xB7"
-	             ".txt\r",
-	        "Done: \xE6\x97\xA5", "edit_jp_create_receipt");
+	const char *jp_name = "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E"
+	                      "\xF0\xA0\xAE\xB7.txt";
+	/* The quiet period after the echo lets the paste guard expire. */
+	PRODUCT_STEP(jp_name, jp_name, "edit_jp_create_name");
+	PRODUCT_STEP("\r", "Done: \xE6\x97\xA5", "edit_jp_create_receipt");
 	swprintf(a, 1100, L"%ls\\日本語\xD842\xDFB7.txt", dir);
 	{
 		WIN32_FIND_DATAW fd;

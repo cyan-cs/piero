@@ -1095,15 +1095,16 @@ int main(void)
 	hits_and_where_they_are();
 	many_hits_come_in_batches_and_in_order_of_distance();
 	hidden_entries_and_a_junction_not_followed();
-	the_limit_is_two_hundred_thousand_and_it_says_at_least();
-	a_group_over_the_limit_is_cut_before_it_is_made();
-	a_slow_screen_stops_the_walk_and_not_the_memory();
 	unreadable_folders_are_counted_and_the_rest_is_searched();
 	a_newer_request_ends_the_older_and_cancel_delivers_nothing();
 	cancellation_reaches_an_inflight_enumerator();
 	stopping_in_the_middle_returns_within_the_wait();
 	duplicates_are_found_by_size_then_prefix_then_the_whole_file();
 	links_cloud_and_empty_files_are_not_compared();
+	/* Fail-fast mutants can report functional failures before the stress cases. */
+	a_slow_screen_stops_the_walk_and_not_the_memory();
+	the_limit_is_two_hundred_thousand_and_it_says_at_least();
+	a_group_over_the_limit_is_cut_before_it_is_made();
 	cleanup();
 
 	if (wf_test_failures) {

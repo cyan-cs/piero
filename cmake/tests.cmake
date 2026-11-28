@@ -394,6 +394,9 @@ if(WF_PWSH)
       # with a bounded 180 s test wait. Allow that control to finish before
       # judging mutants; only an assertion and exit 1 count as a kill.
       set(mutant_hang_limit 240000)
+    elseif(mutant_test_name STREQUAL "test_searchworker_win")
+      # The stress cases have bounded waits of 30, 60 and 120 seconds.
+      set(mutant_hang_limit 240000)
     endif()
     set(control_hang_limit ${mutant_hang_limit})
     if(mutant_test_name STREQUAL "test_batchexec" OR
