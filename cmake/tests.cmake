@@ -408,9 +408,9 @@ if(WF_PWSH)
       string(REGEX REPLACE "^test_" "" control_test "${mutant_test_name}")
       get_test_property(${control_test} TIMEOUT control_seconds)
       math(EXPR control_hang_limit "${control_seconds} * 1000")
-    elseif(mutant_test_name STREQUAL "test_fuzzyworker_win")
-      # Its ordinary test is registered later in this file (120 s). Even a
-      # passing hosted Debug control takes 13.31 s before concurrent load.
+    elseif(mutant_test_name STREQUAL "test_fuzzyworker_win" OR
+        mutant_test_name STREQUAL "test_archive")
+      # Both ordinary tests are registered later with a 120 s timeout.
       set(control_hang_limit 120000)
     endif()
     add_test(NAME release_mutations_${mutant_test_name} COMMAND ${WF_PWSH} -NoProfile -ExecutionPolicy Bypass -File
